@@ -37,9 +37,13 @@ essentially, we're modeling the probability of interacting between two people as
 """
 import numpy as np
 import re
+from SINUtil import *
 
 #TODO: move these constants to the simulation util
 TIME_STEPS_PER_DAY = 1440#for minutes
+PROBABILITY_TRAVEL_SOMEWHERE = 0.2#per time step, what is the baseline probability that someone decides to go somewhere
+AVERAGE_HOME_IDLE_TIME = 60#time steps. the average amount of time someone will spend idle at home before going somewhere
+SSORT_LEVELS = 0#how many levels of quicksort partition should I apply to get the affinity order
 
 """
 Given a "time string" (HH:MM:SS, HH:MM, or just HH), convert that string into the equivalent number of time steps after midnight
@@ -85,7 +89,7 @@ class Person:
 		self.workplace = None  # or school
 		self.work_schedule = None #2-tuple of time -- when I'm at "work"
 		self.sleep_schedule = (tconv('22'),tconv('8'))# we assume, in general, everyone is asleep between 10pm and 8am
-		self.activities = []
+		self.places = []#where do I like to go in my free time
 		self.family = [] #immediate family only -- parents and children
 		self.partners = [] #people this person might interact with sexually
 		self.friends = []
@@ -161,16 +165,54 @@ class Person:
 		if self.currentActivity.activity_type == 'traveling':#then we need to update our coords in the right direction
 			self.currentLocation = self.currentActivity.path.pop()#get the next location we travel through to get where we're going
 
+		self.currentActivity.time_doing += 1  # we have now been doing this for one time step
+
 
 	"""
-	Knowing what time it is, what are the states I could transition to, and with what probability? Pick one from those with those probabilites and do it
+	figure out, based on affinity, who (if anyone) I should talk to
+	"""
+	def talk_to(self):
+		people_here = [x for x in self.currentLocation.people if x != self]  # who is actually here right now that I might go talk to? (not including myself, then)
+		affinities = [self.affinity(x) for x in people_here]
+
+		ph_sort = zip(people_here.copy(),affinities.copy())
+		#TODO: figure out if stochastic sorting this makes sense
+		stoch_sort(ph_sort,SSORT_LEVELS,lambda x,y: x[1] > y[1])#descending stochastic sort the affinities list
+
+		#now go down that list and flip a biased coin for everyone. if heads, return them, otherwise return nothing
+		for p,aff in ph_sort:
+			if np.random.choice([True,False],[aff,1-aff]):
+				return p#we have a winner
+
+		return None#no one here to talk to
+
+	"""
+	do the activity given by the transition
 	"""
 	def action_transition(self,time):
-		#social info
-		people_here = self.currentLocation.people #who is actually here right now that I might go talk to?
-		affinities = [self.affinity(x) for x in people_here if x != self]
+		self.currentActivity = self.get_action_transition(time)
 
 
+	def go_to(self,place):
+		assert(place is not None)
+
+		if self.currentLocation == place:
+			return#we're already there
+
+		if (self.currentActivity.activity_type == 'traveling') and (self.currentActivity.to == place):
+			return self.currentActivity  # we're already going there
+
+		if self.currentLocation.loc_type != 'public':
+			self.set_current_location(public)  # TODO: set our location to be the nearest "public" one
+		act = Activity('traveling')
+		# TODO: precalculate travel path
+		act.to = place
+		return act
+
+	"""
+	Knowing what time it is, what are the states I could transition to, and with what probability? Pick one from those with those probabilites and return it
+	"""
+	def get_action_transition(self,time):
 		#temporal info
 		if self.work_schedule is not None:
 			during_work_time = time_within_tuple(time,self.work_schedule)
@@ -179,24 +221,64 @@ class Person:
 
 		during_sleep_time = time_within_tuple(time,self.sleep_schedule)
 
+		#going to bed logic
 		if during_sleep_time:
 			if self.currentActivity.activity_type == 'sleep':
-				return#don't do anything
+				return self.currentActivity#don't do anything
 
 			if self.currentLocation == self.home:
-				self.currentActivity = Activity('sleep')#go to sleep
-				return
+				return Activity('sleep')#go to sleep
 
 			#we're not at home and we're not asleep, but we should be
-			if (self.currentActivity.activity_type == 'traveling') and (self.currentActivity.to == self.home):
-				return#we're already doing it
 			#go home
-			if self.currentLocation.loc_type != 'public':
-				self.set_current_location(public)
-				#TODO: set our coordinates to be the nearest "public" ones
-			self.currentActivity = Activity('traveling')
-			#TODO: precalculate travel path
-			self.currentActivity.to = self.home
+			return self.go_to(self.home)
+
+
+		#going to work logic
+		if during_work_time and (self.workplace is not None):
+			if self.currentLocation != self.workplace:
+				if not ((self.currentActivity.activity_type == 'traveling') and (self.currentActivity.to == self.workplace)):
+					# go there
+					return self.go_to(self.workplace)
+
+		#so we're where we're supposed to be and doing what we ought to be doing
+		#should we change what we're doing?
+
+
+		#part 1: at work
+		if self.currentLocation == self.workplace:
+			#traveling at the end of the work day
+			if not during_work_time:
+				# go home
+				return self.go_to(self.home)
+
+			#are we talking to someone?
+			if self.currentActivity.activity_type == 'talking':
+				#stop with probability (1 - affinity with this person)
+				aff = self.affinity(self.currentActivity.to)
+				if np.random.choice([True,False],[aff,1-aff]):#continue with probability aff
+					return self.currentActivity
+				else:#stop with prob 1 - aff
+					return Activity('idle')
+
+			#otherwise, should we talk to someone?
+			talk = np.random.choice([True,False])
+			if talk:
+				person = self.talk_to()
+				if person is None:
+					return Activity('idle')
+				act = Activity('talking')
+				act.to = person
+				return act
+			else:
+				return Activity('idle')
+
+		#part 2: at home
+
+		#part 3: at a hospital
+
+		#part 4: anywhere else
+
 
 
 
@@ -362,23 +444,19 @@ activities:
 """
 
 ACTIVITY_TYPES = [
-	'idle',
-	'sleep',
-	'working',
+	'idle',#anything that isn't described below, eg. working, doing homework, playing a game, whatever
+	'sleep',#we can't interact with anyone, we can't be infected
 	'traveling',#everyone walks, we assume
-	'talking',
-	'touching',
-	'intimateTouching'#very important for certain diseases like stds
+	'talking',#we are interacting with someone in a non-intimate way
+	'intimate'#very important for certain diseases like stds
 ]
 
 VALID_LOCATIONS = {
 	'idle':LOCATION_TYPES,
 	'sleep':['home'],
-	'working':LOCATION_TYPES.copy().remove('public'),#anything can be a workplace except public
 	'traveling':['public'],
 	'talking':LOCATION_TYPES,
-	'touching':LOCATION_TYPES,
-	'intimateTouching':'home'
+	'intimate':'home'
 }
 
 class Activity:
@@ -390,6 +468,7 @@ class Activity:
 		#this is the probability if we consider ONLY the activity and not the location or the person etc.
 		# self.transition_probabilities = dict(zip(self.ACTIVITY_TYPES,[0 for _ in range(len(self.ACTIVITY_TYPES))]))
 		self.activity_type = atype
+		self.time_doing = 0#how long has the person been doing this?
 
 		#if this is an action like walking, we need to know where we're going
 		#similarly, if we're talking to someone, we need to know who (these take up the same variable because they're mutually exclusive)

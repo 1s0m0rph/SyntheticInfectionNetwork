@@ -1,0 +1,41 @@
+at work
+	traveling (iff we are there not at the correct time [our work schedule])
+	talking
+		depends on people here
+		probability of stopping is g(affinity)*
+	idle
+		otherwise
+
+at home
+	sleep (iff during our sleep schedule)
+	traveling
+		if during our work hours, to work
+		otherwise, with probability f(time spent here, avg for this location, disease affinity modifier)* [increases with time slowly], to a place in my list of preferred places, chosen with preference to my average affinity with the current clientele of the place
+	talking
+		depends on who's here
+		probability of stopping is g(affinity)**
+	intimate
+		depends on who's here
+		probability of stopping is g(affinity [note: constant])**
+	idle
+		otherwise
+
+at hospital
+	if I'm not sick and I don't work here, go home (or to work if it's during that time)
+	otherwise
+		idle (but disease is more communicable here)
+
+
+otherwise
+	traveling
+		if during work hours, to work
+		if during sleep hours, home
+		otherwise, with probability f(time spent here, avg for this location, disease affinity modifier)* [increases with time slowly], to a place in my list of preferred places, chosen with preference to my average affinity with the current clientele of the place
+		    lower probability of doing this if we're in public
+	talking
+		depends on who's here
+		probability of stopping is g(affinity [note: constant])**
+
+
+* - in particular, use simply 1/<avg time> for every time step (this generates a poisson distribution with parameter 1/<avg time>)
+** - they will eventually stop since they need to sleep. in particular, the probability we stop every time step is simply g(affinity) = 1 - affinity (this is also a poisson with parameter 1/g(affinity)
