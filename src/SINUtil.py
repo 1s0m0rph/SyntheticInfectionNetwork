@@ -38,5 +38,8 @@ def stoch_sort(a,levels=1,comp = lambda x,y: x > y):
 	if levels == 0:
 		aa = np.array(a)
 		np.random.shuffle(aa)
-		return list(aa)#shuffle instead of sort
-	ssort_rec(a,0,len(a),0,levels,comp)
+		return [list(x) for x in aa]#shuffle instead of sort
+	else:
+		aa = a
+		ssort_rec(a,0,len(a),0,levels,comp)
+		return aa

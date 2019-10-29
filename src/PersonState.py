@@ -35,7 +35,7 @@ a person is most likely to interact with their immediate friends and family, and
 essentially, we're modeling the probability of interacting between two people as a decaying function of the geodesic distance between the people
 
 """
-import numpy as np
+import random as rnd
 import re
 from SINUtil import *
 
@@ -176,13 +176,13 @@ class Person:
 		people_here = [x for x in self.currentLocation.people if x != self]  # who is actually here right now that I might go talk to? (not including myself, then)
 		affinities = [self.affinity(x) for x in people_here]
 
-		ph_sort = zip(people_here.copy(),affinities.copy())
+		ph_sort = list(zip(people_here.copy(),affinities.copy()))
 		#TODO: figure out if stochastic sorting this makes sense
-		stoch_sort(ph_sort,SSORT_LEVELS,lambda x,y: x[1] > y[1])#descending stochastic sort the affinities list
+		ph_sort = stoch_sort(ph_sort,SSORT_LEVELS,lambda x,y: x[1] > y[1])#descending stochastic sort the affinities list
 
 		#now go down that list and flip a biased coin for everyone. if heads, return them, otherwise return nothing
 		for p,aff in ph_sort:
-			if np.random.choice([True,False],[aff,1-aff]):
+			if rnd.random() < aff:
 				#we have a winner
 				#just go ahead and create the activity object
 				act = Activity('talking')
@@ -245,9 +245,11 @@ class Person:
 	def continue_interaction(self):
 		# stop with probability (1 - affinity with this person)
 		aff = self.affinity(self.currentActivity.to)
-		if np.random.choice([True, False], [aff, 1 - aff]):  # continue with probability aff
+		if rnd.random() < aff:  # continue with probability aff
 			return self.currentActivity
 		else:  # stop with prob 1 - aff
+			#reset the other person's activity too
+			self.currentActivity.to.currentActivity = Activity('idle')
 			return Activity('idle')
 
 	"""
@@ -298,7 +300,7 @@ class Person:
 				return self.continue_interaction()
 
 			#otherwise, should we talk to someone?
-			talk = np.random.choice([True,False])
+			talk = rnd.random() < 0.5
 			if talk:
 				return self.talk_to()
 			else:
@@ -309,12 +311,11 @@ class Person:
 			if self.currentActivity.activity_type == 'idle':
 				#we can do: traveling, talking, intimate, (idle), in general, but those have particular conditions
 				#which can we actually do?
-				possible_actions = {'idle','talking','intimate','traveling'}
+				possible_actions = ['idle','talking','intimate','traveling']
 
 				#pick one at random and try to do it, if we can't remove it from the set and try another
 				act_do = np.random.choice(possible_actions)
-				possible_actions.remove(act_do)#remove it now
-				while len(possible_actions) >= 0:
+				while len(possible_actions) > 0:#idle and talking never get removed, so it won't ever reach zero but safety
 					#do the action
 					if act_do == 'idle':
 						return Activity('idle')
@@ -322,7 +323,7 @@ class Person:
 						return self.talk_to()
 					elif act_do == 'intimate':
 						people_here = self.currentLocation.people
-						parts_here = set(self.partners).intersection(set(people_here))
+						parts_here = list(set(self.partners).intersection(set(people_here)))
 						if len(parts_here) != 0:
 							#just assume we boink a random one
 							b = np.random.choice(parts_here)
@@ -332,8 +333,13 @@ class Person:
 							act2.to = self
 							b.currentActivity = act2
 							return act
+						possible_actions.remove('intimate')#nevermind then
+						act_do = np.random.choice(possible_actions)
 					elif act_do == 'traveling':
-						return self.go_to(self.pick_rtravel_loc())
+						if len(self.places) != 0:
+							return self.go_to(self.pick_rtravel_loc())
+						possible_actions.remove('traveling')#nevermind then
+						act_do = np.random.choice(possible_actions)
 			else:
 				#action stops
 				if (self.currentActivity.activity_type == 'talking') or (self.currentActivity.activity_type == 'intimate'):
@@ -354,7 +360,7 @@ class Person:
 						return self.continue_interaction()#doesn't always happen
 
 					# otherwise, should we talk to someone?
-					talk = np.random.choice([True, False])
+					talk = rnd.random() < 0.5
 					if talk:
 						return self.talk_to()
 					else:
@@ -374,11 +380,10 @@ class Person:
 		if self.currentActivity.activity_type == 'idle':
 			# we can do: traveling, talking, (idle), in general, but those have particular conditions
 			# which can we actually do?
-			possible_actions = {'idle', 'talking', 'traveling'}
+			possible_actions = ['idle', 'talking', 'traveling']
 
 			# pick one at random and try to do it, if we can't remove it from the set and try another
 			act_do = np.random.choice(possible_actions)
-			possible_actions.remove(act_do)  # remove it now
 			while len(possible_actions) >= 0:
 				# do the action
 				if act_do == 'idle':
@@ -386,7 +391,10 @@ class Person:
 				elif act_do == 'talking':
 					return self.talk_to()
 				elif act_do == 'traveling':
-					return self.go_to(self.pick_rtravel_loc())
+					if len(self.places) != 0:
+						return self.go_to(self.pick_rtravel_loc())
+					possible_actions.remove('traveling')
+					act_do = np.random.choice(possible_actions)
 		else:
 			# action stops
 			if self.currentActivity.activity_type == 'talking':
@@ -529,6 +537,9 @@ class Location:
 		self.people.append(p)
 		p.currentLocation = self
 
+	def __repr__(self):
+		return 'Location of type ' + self.loc_type
+
 
 """
 This part contains all of the information relevant to activities that people can do.
@@ -592,7 +603,7 @@ class Activity:
 		self.path = []#travel path should be precalculated; consists of locations that we will visit on the way (this means public locations need to be split up into a network of small public locations)
 
 	def __repr__(self):
-		return self.activity_type
+		return 'Activity of type ' + self.activity_type + ('' if self.to is None else ' (to ' + str(self.to) + ')')
 
 #static "public" location
 public = Location(float('inf'),'public')#TODO: make this inherited from the general simulation/utils
