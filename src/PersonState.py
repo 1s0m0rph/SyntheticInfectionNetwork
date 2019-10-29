@@ -97,6 +97,7 @@ class Person:
 
 		# infection info
 		self.diseasesInfectedBy = []
+		self.diseasesShowingSymptoms = []#very important difference
 		self.immunities = []
 
 		#behavior info
@@ -121,7 +122,7 @@ class Person:
 			return 0#no affinity if we can't interact
 		is_partner = person in self.partners
 		if is_partner:
-			return max(0,0.9 - (self.disease_affinity_mod if len(self.diseasesInfectedBy) > 0 else 0))#we like to interact with our partners
+			return max(0.,0.9 - (self.disease_affinity_mod if len(self.diseasesShowingSymptoms) > 0 else 0.))#we like to interact with our partners
 
 		rolling_prob = 0.
 		cw_dist = calc_bfs_dist(self,'work', person)#distance on the coworker network
@@ -153,7 +154,7 @@ class Person:
 				fam_aff = aff_decay(0.75,0.25)(fam_dist)
 				rolling_prob = weighted_prob_combination(rolling_prob,0.5,fam_aff,0.5)
 
-		return max(0,rolling_prob - (self.disease_affinity_mod if len(self.diseasesInfectedBy) > 0 else 0))
+		return max(0,rolling_prob - (self.disease_affinity_mod if len(self.diseasesShowingSymptoms) > 0 else 0))
 
 	"""
 	"perform" the current action, if that requires anything
@@ -182,9 +183,17 @@ class Person:
 		#now go down that list and flip a biased coin for everyone. if heads, return them, otherwise return nothing
 		for p,aff in ph_sort:
 			if np.random.choice([True,False],[aff,1-aff]):
-				return p#we have a winner
+				#we have a winner
+				#just go ahead and create the activity object
+				act = Activity('talking')
+				act.to = p
+				#also set the other participant
+				act2 = Activity('talking')
+				act2.to = self
+				p.currentActivity = act2
+				return act#we have a winner
 
-		return None#no one here to talk to
+		return Activity('idle')#no one here to talk to
 
 	"""
 	do the activity given by the transition
@@ -197,7 +206,7 @@ class Person:
 		assert(place is not None)
 
 		if self.currentLocation == place:
-			return#we're already there
+			return Activity('idle')#we're already there
 
 		if (self.currentActivity.activity_type == 'traveling') and (self.currentActivity.to == place):
 			return self.currentActivity  # we're already going there
@@ -208,6 +217,38 @@ class Person:
 		# TODO: precalculate travel path
 		act.to = place
 		return act
+
+
+	"""
+	Pick a random place to travel to
+	
+	done according to the mdp rules -- i.e. to the place in our list with the higest average affinity for its current clientele
+	"""
+	def pick_rtravel_loc(self):
+		#with probability dependent on if we're currently showing symptoms and our disease modifier, go home instead
+		hyg_prob = self.disease_affinity_mod if len(self.diseasesShowingSymptoms) != 0 else 0
+		if np.random.choice([True,False],[hyg_prob,1-hyg_prob]):
+			return self.home
+
+		#otherwise, carry on
+		locs = self.places
+		best_loc = None
+		best_aff = -float('inf')
+		for loc in locs:
+			#get this place's average affinity
+			avg_aff = np.mean([self.affinity(p) for p in loc.people])
+			if avg_aff > best_aff:
+				best_aff = avg_aff
+				best_loc = loc
+		return best_loc
+
+	def continue_interaction(self):
+		# stop with probability (1 - affinity with this person)
+		aff = self.affinity(self.currentActivity.to)
+		if np.random.choice([True, False], [aff, 1 - aff]):  # continue with probability aff
+			return self.currentActivity
+		else:  # stop with prob 1 - aff
+			return Activity('idle')
 
 	"""
 	Knowing what time it is, what are the states I could transition to, and with what probability? Pick one from those with those probabilites and return it
@@ -254,31 +295,106 @@ class Person:
 
 			#are we talking to someone?
 			if self.currentActivity.activity_type == 'talking':
-				#stop with probability (1 - affinity with this person)
-				aff = self.affinity(self.currentActivity.to)
-				if np.random.choice([True,False],[aff,1-aff]):#continue with probability aff
-					return self.currentActivity
-				else:#stop with prob 1 - aff
-					return Activity('idle')
+				return self.continue_interaction()
 
 			#otherwise, should we talk to someone?
 			talk = np.random.choice([True,False])
 			if talk:
-				person = self.talk_to()
-				if person is None:
-					return Activity('idle')
-				act = Activity('talking')
-				act.to = person
-				return act
+				return self.talk_to()
 			else:
 				return Activity('idle')
 
 		#part 2: at home
+		if self.currentLocation == self.home:
+			if self.currentActivity.activity_type == 'idle':
+				#we can do: traveling, talking, intimate, (idle), in general, but those have particular conditions
+				#which can we actually do?
+				possible_actions = {'idle','talking','intimate','traveling'}
+
+				#pick one at random and try to do it, if we can't remove it from the set and try another
+				act_do = np.random.choice(possible_actions)
+				possible_actions.remove(act_do)#remove it now
+				while len(possible_actions) >= 0:
+					#do the action
+					if act_do == 'idle':
+						return Activity('idle')
+					elif act_do == 'talking':
+						return self.talk_to()
+					elif act_do == 'intimate':
+						people_here = self.currentLocation.people
+						parts_here = set(self.partners).intersection(set(people_here))
+						if len(parts_here) != 0:
+							#just assume we boink a random one
+							b = np.random.choice(parts_here)
+							act = Activity('intimate')
+							act.to = b
+							act2 = Activity('intimate')
+							act2.to = self
+							b.currentActivity = act2
+							return act
+					elif act_do == 'traveling':
+						return self.go_to(self.pick_rtravel_loc())
+			else:
+				#action stops
+				if (self.currentActivity.activity_type == 'talking') or (self.currentActivity.activity_type == 'intimate'):
+					return self.continue_interaction()
+				else:
+					raise AttributeError("massive wat -- we can't be traveling and be at home, this should never happen")
 
 		#part 3: at a hospital
+		if self.currentLocation.loc_type == 'hospital':
+			#we know we don't work here since the workplace logic comes before this, but do a sanity check anyway
+			if self.currentLocation != self.workplace:
+				if len(self.diseasesShowingSymptoms) == 0:
+					#go home
+					return self.go_to(self.home)
+				else:
+					# are we talking to someone?
+					if self.currentActivity.activity_type == 'talking':
+						return self.continue_interaction()#doesn't always happen
 
-		#part 4: anywhere else
+					# otherwise, should we talk to someone?
+					talk = np.random.choice([True, False])
+					if talk:
+						return self.talk_to()
+					else:
+						return Activity('idle')
+			else:
+				raise AttributeError('This should never happen: ' + str(self) + ' works at a hospital')
 
+		#part 4: in public
+		if self.currentLocation.loc_type == 'public':
+			#sanity check
+			if self.currentActivity.activity_type == 'traveling':
+				#keep on truckin
+				return self.currentActivity
+			#else we just act like a normal location
+
+		#part 5: everything else
+		if self.currentActivity.activity_type == 'idle':
+			# we can do: traveling, talking, (idle), in general, but those have particular conditions
+			# which can we actually do?
+			possible_actions = {'idle', 'talking', 'traveling'}
+
+			# pick one at random and try to do it, if we can't remove it from the set and try another
+			act_do = np.random.choice(possible_actions)
+			possible_actions.remove(act_do)  # remove it now
+			while len(possible_actions) >= 0:
+				# do the action
+				if act_do == 'idle':
+					return Activity('idle')
+				elif act_do == 'talking':
+					return self.talk_to()
+				elif act_do == 'traveling':
+					return self.go_to(self.pick_rtravel_loc())
+		else:
+			# action stops
+			if self.currentActivity.activity_type == 'talking':
+				return self.continue_interaction()
+			else:
+				raise AttributeError("massive wat -- we can't be traveling and be not in public, this should never happen")
+
+		raise AttributeError("Somehow we didn't pick a transition... this should never happen, but " + str(self) + " has nothing to do!")
 
 
 
