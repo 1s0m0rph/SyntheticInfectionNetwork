@@ -39,11 +39,6 @@ import random as rnd
 import re
 from SINUtil import *
 
-#TODO: move these constants to the simulation util
-TIME_STEPS_PER_DAY = 1440#for minutes
-PROBABILITY_TRAVEL_SOMEWHERE = 0.2#per time step, what is the baseline probability that someone decides to go somewhere
-AVERAGE_HOME_IDLE_TIME = 60#time steps. the average amount of time someone will spend idle at home before going somewhere
-SSORT_LEVELS = 0#how many levels of quicksort partition should I apply to get the affinity order
 
 """
 Given a "time string" (HH:MM:SS, HH:MM, or just HH), convert that string into the equivalent number of time steps after midnight
@@ -96,13 +91,13 @@ class Person:
 		self.coworkers = []  # or schoolmates
 
 		# infection info
-		self.diseasesInfectedBy = []
-		self.diseasesShowingSymptoms = []#very important difference
-		self.immunities = []
+		self.disease_state = {}	#mapping of disease ids onto disease states
+		self.diseasesShowingSymptoms = False
 
 		#behavior info
 		self.hand_wash_coef = 0#given that I'm interacting with someone, what's the probability I've washed my hands first?
 		self.disease_affinity_mod = 0#how much less likely am I to interact with someone given that I'm infected by *some* disease
+		self.diseasesVaccinatable = {}#set of diseases for which I can (or am willing to) be vaccinated for
 
 	def __repr__(self):
 		return "Person " + str(self.id)
@@ -122,7 +117,7 @@ class Person:
 			return 0#no affinity if we can't interact
 		is_partner = person in self.partners
 		if is_partner:
-			return max(0.,0.9 - (self.disease_affinity_mod if len(self.diseasesShowingSymptoms) > 0 else 0.))#we like to interact with our partners
+			return max(0.,0.9 - (self.disease_affinity_mod if self.diseasesShowingSymptoms else 0.))#we like to interact with our partners
 
 		rolling_prob = 0.
 		cw_dist = calc_bfs_dist(self,'work', person)#distance on the coworker network
@@ -154,7 +149,7 @@ class Person:
 				fam_aff = aff_decay(0.75,0.25)(fam_dist)
 				rolling_prob = weighted_prob_combination(rolling_prob,0.5,fam_aff,0.5)
 
-		return max(0,rolling_prob - (self.disease_affinity_mod if len(self.diseasesShowingSymptoms) > 0 else 0))
+		return max(0,rolling_prob - (self.disease_affinity_mod if self.diseasesShowingSymptoms else 0))
 
 	"""
 	"perform" the current action, if that requires anything
@@ -165,6 +160,9 @@ class Person:
 	def do_current_action(self):
 		if self.currentActivity.activity_type == 'traveling':#then we need to update our coords in the right direction
 			self.currentLocation = self.currentActivity.path.pop()#get the next location we travel through to get where we're going
+
+		elif self.currentActivity.activity_type == 'talking':
+			pass
 
 		self.currentActivity.time_doing += 1  # we have now been doing this for one time step
 
@@ -226,7 +224,7 @@ class Person:
 	"""
 	def pick_rtravel_loc(self):
 		#with probability dependent on if we're currently showing symptoms and our disease modifier, go home instead
-		hyg_prob = self.disease_affinity_mod if len(self.diseasesShowingSymptoms) != 0 else 0
+		hyg_prob = self.disease_affinity_mod if self.diseasesShowingSymptoms else 0
 		if np.random.choice([True,False],[hyg_prob,1-hyg_prob]):
 			return self.home
 
@@ -351,7 +349,7 @@ class Person:
 		if self.currentLocation.loc_type == 'hospital':
 			#we know we don't work here since the workplace logic comes before this, but do a sanity check anyway
 			if self.currentLocation != self.workplace:
-				if len(self.diseasesShowingSymptoms) == 0:
+				if not self.diseasesShowingSymptoms:
 					#go home
 					return self.go_to(self.home)
 				else:
@@ -420,12 +418,6 @@ simplified, we get that f(x) = ((level_one^2) * (level_two / level_one)^x) / lev
 def aff_decay(level_one, level_two):
 	return lambda x: ((level_one ** 2) * (level_two / level_one) ** x) / level_two
 
-
-"""
-Combine these probabilities into a unified one depending on given weights which should sum to 1 in general
-"""
-def weighted_prob_combination(p1,w1,p2,w2):
-	return p1*w1 + p2*w2
 
 
 """
@@ -520,7 +512,7 @@ class Location:
 		self.loc_type = loc_type
 
 
-		#TODO: potential additions?
+		#TODO: location-map interface
 		#map (x,y) coordinates (list of points that define a polygon describing its edges)
 		#these points should define a walk that starts from the first one and implicitly ends back at the first one
 		#e.g. [(0,0),(0,1),(1,1),(1,0)] describes the unit square
@@ -536,6 +528,34 @@ class Location:
 			p.currentLocation.people.remove(p)
 		self.people.append(p)
 		p.currentLocation = self
+
+	"""
+	Do a round of infections with the people here now
+	
+	for each pair of people (a,b):
+		for each disease d a is infected by:
+			ask d if a infects b
+			if yes, add (a,d,b) to the infections set
+		for each disease d b is infected by:
+			ask d if b infects a
+			if yes, add (b,d,a) to the infections set
+	
+	return infections set (logic above this will actually do the infections so it's entirely synchronous per time step)
+	
+	"""
+	def infection_round(self):
+		# TODO: insert logic for infections in the general simulation code to wrap this
+		rset = set()
+		for a in self.people:
+			for b in self.people:
+				if a != b:
+					for d_id in a.disease_state:
+						if diseases_active[d_id].infects(a,b):
+							rset.add((a,d_id,b))
+					for d_id in b.disease_state:
+						if diseases_active[d_id].infects(b,a):
+							rset.add((b,d_id,a))
+		return rset
 
 	def __repr__(self):
 		return 'Location of type ' + self.loc_type
