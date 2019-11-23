@@ -52,10 +52,10 @@ class Disease:
 		if (a.currentActivity.activity_type == 'talking') or (a.currentActivity.activity_type == 'intimate'):
 			a_washed_hands = int(coinflip(a.hand_wash_coef))
 			b_washed_hands = int(coinflip(b.hand_wash_coef))
-			hand_wash_effect = self.hand_wash_coef*HANDWASH_EFFECT_MODIFIERS[a_washed_hands][b_washed_hands]
+			hand_wash_effect = self.hand_wash_coef*HANDWASH_EFFECT_MODIFIERS[a_washed_hands][b_washed_hands]#the items in HANDWASH_EFFECT_MODIFIERS are all nonpositive, so this can only hurt the disease
 		intimate_effect = 0.
 		if a.currentActivity.activity_type == 'intimate':
-			intimate_effect = INTIMATE_EFFECT_MODIFIER
+			intimate_effect = INTIMATE_EFFECT_MODIFIER#this is in general, not specific to the disease
 
 		infectivity = self.infectivity[a.currentActivity.activity_type] + symptom_effect + hand_wash_effect + intimate_effect
 

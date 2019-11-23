@@ -511,14 +511,13 @@ class Location:
 		self.capacity = capacity
 		self.loc_type = loc_type
 
+		self.adj_locs = []#what locations are adjacent to me?
+		self.travel_time = -1#how long does it take to travel through me? this will be proportional to size
 
-		#TODO: location-map interface
-		#map (x,y) coordinates (list of points that define a polygon describing its edges)
-		#these points should define a walk that starts from the first one and implicitly ends back at the first one
-		#e.g. [(0,0),(0,1),(1,1),(1,0)] describes the unit square
-		self.mapcoords = []
-		self.mapcenterx = -1#center of this object on the map
-		self.mapcentery = -1
+		#these are only used for heuristics, and refer to the center of the object on the map
+		self.mapx = -1
+		self.mapy = -1
+
 
 	def arrive(self,p: Person):
 		if len(self.people) >= self.capacity:#we can't take this person on, reject them

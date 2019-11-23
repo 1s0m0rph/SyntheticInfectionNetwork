@@ -10,7 +10,7 @@ SSORT_LEVELS = 0#how many levels of quicksort partition should I apply to get th
 
 DISEASE_STATES = {'S','II','IS','R','V'}#Susceptible; Infected, Infectious; Infected, showing Symptoms; Recovered; Vaccinated
 
-HANDWASH_EFFECT_MODIFIERS = [[0,-0.1],
+HANDWASH_EFFECT_MODIFIERS = [[0.,-0.1],
 							 [-0.1,-0.5]]#modifiers for infectivity, given that (a,b) washed their hands
 
 INTIMATE_EFFECT_MODIFIER = 0.2#how much more infectious things tend to be when people are intimate with infecteds
@@ -26,18 +26,20 @@ def swap(a,idx1,idx2):
 def partition(a,low,high,comp):
 	pivotIdx = np.random.choice(list(range(low,high)))
 	pivot = a[pivotIdx]
-	swap(a,pivotIdx,-1)
+	swap(a,pivotIdx,high-1)
 	j = low
 	for i in range(low,high - 1):
 		if comp(a[i],pivot):
 			swap(a,i,j)
 			j+=1
 
-	swap(a,j,-1)
-	return pivotIdx
+	swap(a,j,high-1)
+	return j
 
 def ssort_rec(a,low,high,level,maxlevel,comp):
-	if level == maxlevel:
+	if level >= maxlevel:
+		return
+	if low >= high:
 		return
 
 	q = partition(a,low,high,comp)
@@ -55,8 +57,8 @@ def stoch_sort(a,levels=1,comp = lambda x,y: x > y):
 		np.random.shuffle(aa)
 		return [list(x) for x in aa]#shuffle instead of sort
 	else:
-		aa = a
-		ssort_rec(a,0,len(a),0,levels,comp)
+		aa = a.copy()
+		ssort_rec(aa,0,len(aa),0,levels,comp)
 		return aa
 
 
@@ -68,3 +70,22 @@ def weighted_prob_combination(p1,w1,p2,w2):
 
 def coinflip(p):
 	return np.random.choice([True,False],p=[p,1-p])
+
+
+"""
+manhattan distance (aka 1-norm) between (x0,x1,...) and (y0,y1,...)
+"""
+def manhattan_distance(x,y):
+	r = 0
+	for xi,yi in zip(x,y):
+		r += abs(xi+yi)
+	return r
+
+"""
+euclidean distance (aka 2-norm) between x and y
+"""
+def eucl_distance(x,y):
+	r = 0
+	for xi,yi in zip(x,y):
+		r += (xi + yi)**2
+	return np.sqrt(r)
