@@ -506,17 +506,17 @@ class Location:
 		'spectator' (theater/sports event/concert/movie theater), 'convention', 'restaurant', 'shop', 'public' (park, town square; this will be used to move people between other locations), 'casino' ,
 		'home', 'school', 'vehicle'
 	"""
-	def __init__(self,capacity,loc_type):
+	def __init__(self,loc_type,capacity=-1):
 		self.people = []
 		self.capacity = capacity
 		self.loc_type = loc_type
 
-		self.adj_locs = []#what locations are adjacent to me?
+		self.adj_locs = set()#what locations are adjacent to me?
 		self.travel_time = -1#how long does it take to travel through me? this will be proportional to size
 
 		#these are only used for heuristics, and refer to the center of the object on the map
-		self.mapx = -1
-		self.mapy = -1
+		self.mapx_center = -1
+		self.mapy_center = -1
 
 
 	def arrive(self,p: Person):
@@ -625,4 +625,4 @@ class Activity:
 		return 'Activity of type ' + self.activity_type + ('' if self.to is None else ' (to ' + str(self.to) + ')')
 
 #static "public" location
-public = Location(float('inf'),'public')#TODO: make this inherited from the general simulation/utils
+public = Location('public',float('inf'))#TODO: make this inherited from the general simulation/utils, also change the float inf to int

@@ -7,8 +7,8 @@ class TestPerson(TestCase):
 
 
 	def test_affinity(self):
-		test_home = Location(8, 'home')
-		test_wp = Location(300, 'casino')
+		test_home = Location('home',8)
+		test_wp = Location('casino',300)
 
 		p0 = Person(test_home, 0)
 		p1 = Person(test_home, 1)
@@ -98,8 +98,8 @@ class TestPerson(TestCase):
 
 
 	def test_action_transition(self):
-		test_home = Location(8, 'home')
-		test_wp = Location(300, 'casino')
+		test_home = Location('home',8)
+		test_wp = Location('casino',300)
 
 		p0 = Person(test_home, 0)
 		p1 = Person(test_home, 1)

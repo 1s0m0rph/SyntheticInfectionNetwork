@@ -89,3 +89,14 @@ def eucl_distance(x,y):
 	for xi,yi in zip(x,y):
 		r += (xi + yi)**2
 	return np.sqrt(r)
+
+"""
+pad string s to length l with character withch, adding characters to either the beginning (at_beginning = True) or the end (else) 
+"""
+def pad(s:str,l:int,withch='0',at_beginning=True):
+	while len(s) < l:
+		if at_beginning:
+			s = withch + s
+		else:
+			s = s + withch
+	return s
