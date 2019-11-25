@@ -12,19 +12,21 @@ LOC_TYPE_COLORS = {'home':'7f0000',
 					   'shop':'0000ff',
 					   'public':'000000',
 					   'hospital':'dc2323',
-					   'VOID':'ffffff'#this is a special type used for when you're too lazy to actually fill in all the pixels; it is ignored
+					   'VOID':'ffffff',#this is a special type used for when you're too lazy to actually fill in all the pixels; it is ignored
+				   	   'PROC_FINISHED':'f0f0f0'#this is a special type used to indicate that processing for this pixel is finished
 					   }
 
 LTC_INV = {LOC_TYPE_COLORS[k]:k for k in LOC_TYPE_COLORS}#this is just the inverse of the color map
 
-LOC_TYPE_INDEX = {'home':0,
-					   'office':1,
-					   'convention':2,
-					   'shop':3,
-					   'public':4,
-					   'hospital':5,
-					   'VOID':6
-					   }
+LOC_TYPE_INDEX = {	'home':0,
+					'office':1,
+					'convention':2,
+				   	'shop':3,
+				   	'public':4,
+				   	'hospital':5,
+				   	'VOID':6,
+					'PROC_FINISHED':7
+				   }
 
 LTI_INV = {LOC_TYPE_INDEX[k]:k for k in LOC_TYPE_INDEX}
 
@@ -51,7 +53,6 @@ class MapReader:
 
 	TIME_STEP_PER_PIXEL = 1	#how many time steps does it take to traverse 1 pixel?
 
-	from PersonState import Location
 
 	def __init__(self):
 		self.R_LTC_INTERNAL = {LOC_TYPE_INDEX[k]:k for k in LOC_TYPE_INDEX}#this is just the inverse of the type map
@@ -107,7 +108,7 @@ class MapReader:
 			return#nothing to do, since we want to just ignore void regions
 
 		#now do a bfs starting from this pixel
-		#info for calculating the centroid and capacity
+		#info for calculating the centroid, capacity, and travel time
 		npixels = 1#the only one we have is the start pixel
 		coordsum_in_loc_x = startx
 		coordsum_in_loc_y = starty
@@ -137,11 +138,14 @@ class MapReader:
 		avgx = float(coordsum_in_loc_x) / float(npixels)
 		avgy = float(coordsum_in_loc_y) / float(npixels)
 		#centroid is (avgx,avgy)
+		ttime = np.sqrt(npixels)
+		#travel time is assumed to be linear in the side length of a square with equivalent area
 
 		from PersonState import Location
 		l = Location(LTI_INV[ltype_i],capacity=cap)
 		l.mapx_center = avgx
 		l.mapy_center = avgy
+		l.travel_time = ttime
 		self.loc_list.append(l)
 
 		self.next_loc_idx += 1
@@ -175,12 +179,12 @@ class MapReader:
 		llimy = 0
 
 		loc_assign = self.img[starty][startx]
-		if loc_assign == LOC_TYPE_INDEX['VOID']:
+		if (loc_assign == LOC_TYPE_INDEX['VOID']) or (loc_assign == LOC_TYPE_INDEX['PROC_FINISHED']):
 			return#nothing to do
 		assert(loc_assign not in LOC_TYPE_INDEX)#can't be an unassigned generic location type
 
-		seen = {(startx,starty)}
 		travq = [(startx, starty)]
+		self.img[starty][startx] = LOC_TYPE_INDEX['PROC_FINISHED']#meaning processing for this one is done
 
 		while len(travq) > 0:
 			cx, cy = travq.pop()
@@ -190,15 +194,16 @@ class MapReader:
 				if not ((jx < llimx) or (jy < llimy) or (jx >= endx) or (jy >= endy)):
 					# then this is actually a neighbor and is in the image (not off the edge)
 					jval = self.img[jy][jx]
-					if (jval != loc_assign) and (jval != LOC_TYPE_INDEX['VOID']):
+					if (jval != loc_assign) and (jval != LOC_TYPE_INDEX['VOID']) and (jval != LOC_TYPE_INDEX['PROC_FINISHED']):
 						# then this pixel is of the right type, assign its location to be adjacent to us
 
 						self.loc_list[jval - len(LOC_TYPE_COLORS)].adj_locs.add(self.loc_list[loc_assign - len(LOC_TYPE_COLORS)])
 						self.loc_list[loc_assign - len(LOC_TYPE_COLORS)].adj_locs.add(self.loc_list[jval - len(LOC_TYPE_COLORS)])
 
-					elif (jval != LOC_TYPE_INDEX['VOID']) and ((jx,jy) not in seen):
+					elif (jval != LOC_TYPE_INDEX['VOID']) and (jval != LOC_TYPE_INDEX['PROC_FINISHED']):
 						travq.append((jx, jy))
-						seen.add((jx,jy))
+						self.img[jy][jx] = LOC_TYPE_INDEX['PROC_FINISHED']
+
 
 
 	'''
@@ -206,7 +211,7 @@ class MapReader:
 	
 	also do the adjacencies while we're at it
 	'''
-	def assign_all_blocks(self):
+	def assign_all_blocks(self,do_adjacencies=True):
 		x,y = self.scan_to_next(0,0,assigned=False)
 		while (x != -1) and (y != -1):
 			endx = endy = None
@@ -222,10 +227,11 @@ class MapReader:
 			x,y = self.scan_to_next(x,y,assigned=False)
 
 		#now do the adjacencies
-		x, y = self.scan_to_next(0, 0, assigned=False)
-		while (x != -1) and (y != -1):
-			self.assign_loc_adjacencies(x,y)
-			x, y = self.scan_to_next(x, y, assigned=False)
+		if do_adjacencies:
+			x, y = self.scan_to_next(0, 0, assigned=True)
+			while (x != -1) and (y != -1):
+				self.assign_loc_adjacencies(x,y)
+				x, y = self.scan_to_next(x, y, assigned=True)
 
 
 	'''

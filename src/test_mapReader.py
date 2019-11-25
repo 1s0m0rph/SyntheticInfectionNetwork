@@ -17,8 +17,8 @@ class TestMapReader(TestCase):
 
 		mr.assign_number_to_contiguous_block(0, 0)
 
-		assert (mr.img == [[7, 7, 7, 2, 0],
-						   [1, 1, 7, 2, 0],
+		assert (mr.img == [[8, 8, 8, 2, 0],
+						   [1, 1, 8, 2, 0],
 						   [1, 1, 6, 2, 0],
 						   [2, 2, 2, 2, 0],
 						   [1, 1, 1, 1, 0],
@@ -27,8 +27,8 @@ class TestMapReader(TestCase):
 
 		mr.assign_number_to_contiguous_block(2, 2)
 
-		assert (mr.img == [[7, 7, 7, 2, 0],
-						   [1, 1, 7, 2, 0],
+		assert (mr.img == [[8, 8, 8, 2, 0],
+						   [1, 1, 8, 2, 0],
 						   [1, 1, 6, 2, 0],
 						   [2, 2, 2, 2, 0],
 						   [1, 1, 1, 1, 0],
@@ -38,10 +38,10 @@ class TestMapReader(TestCase):
 		# limits testing
 		mr.assign_number_to_contiguous_block(4, 2, 4 + 2, 2 + 2, 4, 2)
 
-		assert (mr.img == [[7, 7, 7, 2, 0],
-						   [1, 1, 7, 2, 0],
-						   [1, 1, 6, 2, 8],
-						   [2, 2, 2, 2, 8],
+		assert (mr.img == [[8, 8, 8, 2, 0],
+						   [1, 1, 8, 2, 0],
+						   [1, 1, 6, 2, 9],
+						   [2, 2, 2, 2, 9],
 						   [1, 1, 1, 1, 0],
 						   [6, 6, 6, 6, 6]]
 				)
@@ -57,13 +57,13 @@ class TestMapReader(TestCase):
 		mr = MapReader()
 		mr.img = img
 
-		mr.assign_all_blocks()
+		mr.assign_all_blocks(do_adjacencies=False)
 
-		assert (mr.img == [[7, 7, 7, 8, 9],
-						   [10, 10, 7, 8, 9],
-						   [10, 10, 6, 8, 9],
-						   [8, 8, 8, 8, 9],
-						   [11, 11, 11, 11, 9],
+		assert (mr.img == [[8, 8, 8, 9, 10],
+						   [11, 11, 8, 9, 10],
+						   [11, 11, 6, 9, 10],
+						   [9, 9, 9, 9, 10],
+						   [12, 12, 12, 12, 10],
 						   [6, 6, 6, 6, 6]]
 				)
 
@@ -82,19 +82,19 @@ class TestMapReader(TestCase):
 		mr = MapReader()
 		mr.img = img
 
-		mr.assign_all_blocks()
+		mr.assign_all_blocks(do_adjacencies=False)
 
-		assert (mr.img == [[7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8],
-						   [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8],
-						   [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8],
-						   [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8],
-						   [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8],
-						   [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8],
-						   [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8],
-						   [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8],
-						   [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8],
-						   [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8],
-						   [9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10]]
+		assert (mr.img == [[8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9],
+						   [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9],
+						   [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9],
+						   [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9],
+						   [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9],
+						   [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9],
+						   [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9],
+						   [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9],
+						   [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9],
+						   [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9],
+						   [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11]]
 				)
 
 		assert (len(mr.loc_list) == 4)
@@ -103,11 +103,11 @@ class TestMapReader(TestCase):
 		assert (mr.loc_list[3].mapy_center == 10)
 
 	def test_assign_loc_adjacencies(self):
-		img = [[7, 7, 7, 8, 9],
-			   [10, 10, 7, 8, 9],
-			   [10, 10, 6, 8, 9],
-			   [8, 8, 8, 8, 9],
-			   [11, 11, 11, 11, 9],
+		img = [[8, 8, 8, 9, 10],
+			   [11, 11, 8, 9, 10],
+			   [11, 11, 6, 9, 10],
+			   [9, 9, 9, 9, 10],
+			   [12, 12, 12, 12, 10],
 			   [6, 6, 6, 6, 6]]
 
 		mr = MapReader()
@@ -137,6 +137,7 @@ class TestMapReader(TestCase):
 		#13 office
 		#13 shops
 		#298 homes
+		#and, for the sake of regression testing, 518 public cells
 		mr = MapReader()
 
 		m = mr.create_map_from_file(fname)
@@ -146,5 +147,4 @@ class TestMapReader(TestCase):
 			loc_i = LOC_TYPE_INDEX[loc.loc_type]
 			counts[loc_i] += 1
 
-		del counts[4]
-		assert(counts == [298,13,1,13,1,0])
+		assert(counts == [298,13,1,13,518,1,0])
