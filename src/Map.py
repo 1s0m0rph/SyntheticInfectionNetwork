@@ -5,6 +5,7 @@ This file defines all of the classes, algorithms, and data structures related to
 
 
 from SINUtil import *
+import heapq as hq
 
 LOC_TYPE_COLORS = {'home':'7f0000',
 					   'office':'ff00ff',
@@ -54,10 +55,17 @@ class MapReader:
 	TIME_STEP_PER_PIXEL = 1	#how many time steps does it take to traverse 1 pixel?
 
 
-	def __init__(self):
+	def __init__(self,PUBLIC_BLOCK_SIZE=None,CAPACITY_PER_PIXEL=None,TIME_STEP_PER_PIXEL=None):
 		self.R_LTC_INTERNAL = {LOC_TYPE_INDEX[k]:k for k in LOC_TYPE_INDEX}#this is just the inverse of the type map
 		self.img = None
 		self.next_loc_idx = len(LOC_TYPE_COLORS)#basically, what's the next location index we'll assign?
+
+		if PUBLIC_BLOCK_SIZE is not None:
+			self.PUBLIC_BLOCK_SIZE = PUBLIC_BLOCK_SIZE
+		if CAPACITY_PER_PIXEL is not None:
+			self.CAPACITY_PER_PIXEL = CAPACITY_PER_PIXEL
+		if TIME_STEP_PER_PIXEL is not None:
+			self.TIME_STEP_PER_PIXEL = TIME_STEP_PER_PIXEL
 
 		self.loc_list = []
 
@@ -133,7 +141,7 @@ class MapReader:
 						coordsum_in_loc_x += jx
 						coordsum_in_loc_y += jy
 
-		cap = int(npixels * MapReader.CAPACITY_PER_PIXEL)
+		cap = int(npixels * self.CAPACITY_PER_PIXEL)
 		#average the coordsums to get the centroid
 		avgx = float(coordsum_in_loc_x) / float(npixels)
 		avgy = float(coordsum_in_loc_y) / float(npixels)
@@ -145,7 +153,7 @@ class MapReader:
 		l = Location(LTI_INV[ltype_i],capacity=cap)
 		l.mapx_center = avgx
 		l.mapy_center = avgy
-		l.travel_time = ttime
+		l.travel_time = ttime * self.TIME_STEP_PER_PIXEL
 		self.loc_list.append(l)
 
 		self.next_loc_idx += 1
@@ -217,8 +225,8 @@ class MapReader:
 			endx = endy = None
 			llimx = llimy = None
 			if self.img[y][x] == LOC_TYPE_INDEX['public']:#then we need to impose limits
-				endx = x + MapReader.PUBLIC_BLOCK_SIZE[0]
-				endy = y + MapReader.PUBLIC_BLOCK_SIZE[1]
+				endx = x + self.PUBLIC_BLOCK_SIZE[0]
+				endy = y + self.PUBLIC_BLOCK_SIZE[1]
 
 				llimx = x
 				llimy = y
@@ -246,7 +254,7 @@ class MapReader:
 	def create_map_from_file(self,fname):
 		self.read_from_file(fname)
 		self.assign_all_blocks()
-		m = Map(self.loc_list)
+		m = Map(self.loc_list,TIME_STEP_PER_PIXEL=self.TIME_STEP_PER_PIXEL)
 		return m
 
 """
@@ -263,9 +271,14 @@ class Map:
 
 	from PersonState import Location
 
-	def __init__(self,loc_list):
+	TIME_STEP_PER_PIXEL = 1  # how many time steps does it take to traverse 1 pixel?
+
+	def __init__(self,loc_list,TIME_STEP_PER_PIXEL=None):
 
 		self.loc_list = loc_list#list of locations, they each maintain their own adjacencies
+
+		if TIME_STEP_PER_PIXEL is not None:
+			self.TIME_STEP_PER_PIXEL = TIME_STEP_PER_PIXEL
 
 
 	'''
@@ -273,20 +286,61 @@ class Map:
 	
 	uses dijkstra/uniform cost with A* manhattan heuristic, moving only on public spaces (the first move is to go from this location to the nearest public one
 		h (parameter) is the heuristic function
+	
+	because the map isn't perfectly represented by such a heuristic, it's technically not admissable, so we're not guaranteed optimality. That doesn't really matter since we only really care that people get from point a to point b and not so much how fast it takes them but how much we spend doing the calculation (euclidean is at least closer to being admissable, but since it generally visits like 2x as many places, we're using manhattan)
 	'''
-	def get_path(self,a:Location,b:Location,h=manhattan_distance):
+	def get_path(self,a:Location,b:Location,h=manhattan_distance,verbose=False):
 		if a == b:
 			return []#we're already there
 		path = []
 		current_loc = a
+		pred = {a:None}#mapping of locations to their predecessors
+		dist = {a:0}#mapping of locations to their distances
 		if a.loc_type != 'public':#then find the/a public space adjacent to a
 			for lj in a.adj_locs:
 				if lj.loc_type == 'public':
 					path.append(lj)
+					current_loc = lj
+					pred.update({current_loc:a})
+					dist.update({current_loc:current_loc.travel_time})
 					break
 			if len(path) == 0:
 				raise AttributeError("Location " + str(a) + " is not adjacent to a location of type public.")
 
-		#TODO: implement dijkstra/ucs/A* here
 
+		tb = 1#tiebreaker for the heap
+		nq = [(0,0,current_loc)]#priority queue (minheap) for visiting new locations
+		b_heuristic_location = (b.mapx_center,b.mapy_center)
+		visited = set()
+
+		while len(nq) > 0:
+			_, _, current_loc = hq.heappop(nq)
+			if current_loc == b:
+				#we're done here
+				break
+			visited.add(current_loc)
+
+			if current_loc.loc_type == 'public':#we don't want to go *through* anything that isn't public
+				for nloc in current_loc.adj_locs:
+					#get its distance
+					dist_n = dist[current_loc] + nloc.travel_time#simple edge distance <travel time>
+					h_n = h((current_loc.mapx_center,current_loc.mapy_center),b_heuristic_location) * self.TIME_STEP_PER_PIXEL#heuristic
+					cost_n = dist_n + h_n
+					if ((nloc in pred) and ((dist[nloc] + h_n) > cost_n)) or (nloc not in pred):
+						#add it to the heap
+						hq.heappush(nq, (cost_n, tb, nloc))#put in the tiebreaker here so that if two cost_ns are the same we don't try to compare locations. priority goes, then, to earlier ones
+						tb += 1
+						pred.update({nloc:current_loc})
+						dist.update({nloc:dist_n})
+
+		#retrace the path
+		current_loc = b
+		rpath = []
+		while current_loc != a:
+			rpath.append(current_loc)
+			current_loc = pred[current_loc]
+
+		path = path + list(reversed(rpath))
+		if verbose:
+			print("calculated distance from " + str(a) + " to " + str(b) + " is " + str(dist[b]) + ", using " + str(len(path) - 2) + " public locations. visited " + str(len(visited)) + " locations to determine this.")
 		return path

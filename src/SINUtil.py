@@ -78,7 +78,7 @@ manhattan distance (aka 1-norm) between (x0,x1,...) and (y0,y1,...)
 def manhattan_distance(x,y):
 	r = 0
 	for xi,yi in zip(x,y):
-		r += abs(xi+yi)
+		r += abs(xi - yi)
 	return r
 
 """
@@ -87,7 +87,7 @@ euclidean distance (aka 2-norm) between x and y
 def eucl_distance(x,y):
 	r = 0
 	for xi,yi in zip(x,y):
-		r += (xi + yi)**2
+		r += (xi - yi)**2
 	return np.sqrt(r)
 
 """
