@@ -277,6 +277,8 @@ class Map:
 
 		self.loc_list = loc_list#list of locations, they each maintain their own adjacencies
 
+		self.avg_ages_assigned = False
+
 		if TIME_STEP_PER_PIXEL is not None:
 			self.TIME_STEP_PER_PIXEL = TIME_STEP_PER_PIXEL
 
@@ -350,40 +352,44 @@ class Map:
 	'''
 	def get_random_location(self,t:str):
 		for loc in self.loc_list:
-			if (loc.loc_type == t) and (len(loc.people) < loc.capacity):
+			if (loc.loc_type == t) and (not loc.is_full()):
 				return loc
 
 	'''
-	returns the unique school location (assigns it if it doesn't exist)
+	ok, so no school exists. we need to find one. ideally, we'll find one that already has enough capacity, 
+	but if all the offices are too small, take the biggest one and make its capacity equal to the max size we 
+	were given
 	'''
-	def get_school(self,max_size):
-		#TODO: make sure this function is called before we assign any workplaces
-		for loc in self.loc_list:
-			if loc.is_school:
-				return loc
-
-		#ok, so no school exists. we need to find one. ideally, we'll find one that already has enough capacity, but if all the offices are too small, take the biggest one and make its capacity equal to the max size we were given
+	def create_school(self,max_size):
 		office_max_idx = -1
 		office_max_cap = -float('inf')
-		office_min_over_spec_idx = -1	#the office which has the smallest capacity that is higher than max_size
+		office_min_over_spec_idx = -1  # the office which has the smallest capacity that is higher than max_size
 		office_min_over_spec_cap = float('inf')
-		for i,loc in enumerate(self.loc_list):
+		for i, loc in enumerate(self.loc_list):
 			if loc.loc_type == 'office':
-				if (loc.capacity >= max_size) and (loc.capacity < office_min_over_spec_cap):#then this one will do
+				if (loc.capacity >= max_size) and (loc.capacity < office_min_over_spec_cap):  # then this one will do
 					office_min_over_spec_idx = i
 					office_min_over_spec_cap = loc.capacity
 				if loc.capacity > office_max_cap:
 					office_max_idx = i
 					office_max_cap = loc.capacity
 
-		if office_min_over_spec_idx != -1:#then we already had a big enough one, use it
+		if office_min_over_spec_idx != -1:  # then we already had a big enough one, use it
 			self.loc_list[office_min_over_spec_idx].is_school = True
-			return self.loc_list[office_min_over_spec_idx]
-		else:#use the biggest one
-			assert(office_max_idx != -1)
+		else:  # use the biggest one
+			assert (office_max_idx != -1)
 			self.loc_list[office_max_idx].is_school = True
 			self.loc_list[office_max_idx].capacity = max_size
-			return self.loc_list[office_max_idx]
+
+	'''
+	returns the unique school location (assigns it if it doesn't exist)
+	'''
+	def get_school(self):
+		for loc in self.loc_list:
+			if loc.is_school:
+				return loc
+
+		raise AttributeError("School was not created before having been asked for!")
 
 
 	'''
@@ -394,3 +400,65 @@ class Map:
 		for loc in self.loc_list:
 			if (loc.loc_type == 'public') and (loc.arrive(p)):
 				return#side effects of loc.arrive are that the person is now at that location iff there was capacity for them
+
+	'''
+	People can work anywhere but 'public' locations.
+	
+	this will return the list of nonpublic locations as well to speed up computation
+	'''
+	def get_random_workable_location(self,non_public = None):
+		if non_public is None:
+			non_public = list(map(lambda x: x.loc_type != 'public', self.loc_list))
+
+		return np.random.choice(non_public),non_public
+
+	'''
+	Given a distribution function () -> int, assign to each (relevant) location an average age
+	as well as a distribution function () -> float for standard deviation
+	'''
+	def assign_avg_ages(self, ages_avg_distrib, ages_stdev_distrib):
+		if self.avg_ages_assigned:
+			return
+
+		for loc in self.loc_list:
+			if loc.loc_type in PLACABLE_LOCATION_TYPES:
+				loc.avg_age = ages_avg_distrib()
+				loc.age_stdev = ages_stdev_distrib()
+		self.avg_ages_assigned = True
+
+	'''
+	use this person's age to find a random location relevant to them and assign it to them
+	'''
+	def add_random_placable_location(self,person,ages_avg_distrib,ages_stdev_distrib):
+		self.assign_avg_ages(ages_avg_distrib,ages_stdev_distrib)
+
+		np.random.shuffle(self.loc_list)#in random order
+		loc_closest = self.loc_list[0]
+		loc_closest_val = self.loc_list[0].age_prob(person.age)
+		for loc in self.loc_list:
+			if (loc.loc_type in PLACABLE_LOCATION_TYPES) and (loc not in person.places):#only considering valid values that aren't already in their places list
+				if coinflip(loc.age_prob(person.age)):#with probability Norm(mu,sig), add this to the person's location
+					#then this one is added
+					person.add_place(loc)
+					return
+				else:
+					this_val = loc.age_prob(person.age)
+					if this_val > loc_closest_val:
+						loc_closest = loc
+						loc_closest_val = this_val
+
+		person.add_place(loc_closest)#just add the one with the highest probability
+
+
+	def get_random_house(self,houses=None):
+		if houses is None:
+			houses = list(map(lambda x: x.loc_type == 'home', self.loc_list))
+
+		hidx = np.random.choice(range(len(houses)))
+		h = houses[hidx]
+		while h.is_full():
+			del houses[hidx]
+			hidx = np.random.choice(range(len(houses)))
+			h = houses[hidx]
+
+		return h,houses

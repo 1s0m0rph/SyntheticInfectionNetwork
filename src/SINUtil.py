@@ -15,6 +15,11 @@ HANDWASH_EFFECT_MODIFIERS = [[0.,-0.1],
 
 INTIMATE_EFFECT_MODIFIER = 0.2#how much more infectious things tend to be when people are intimate with infecteds
 
+PLACABLE_LOCATION_TYPES = {'convention','shop'}
+
+BIDIRECTIONAL_COWORKERS = False
+BIDIRECTIONAL_FRIENDS = False
+
 #TODO: move to the actual simulation part
 diseases_active = {0:None}#mapping of disease id to the actual disease object
 
