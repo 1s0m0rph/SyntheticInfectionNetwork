@@ -344,3 +344,53 @@ class Map:
 		if verbose:
 			print("calculated distance from " + str(a) + " to " + str(b) + " is " + str(dist[b]) + ", using " + str(len(path) - 2) + " public locations. visited " + str(len(visited)) + " locations to determine this.")
 		return path
+
+	'''
+	returns a random nonfull location of type t
+	'''
+	def get_random_location(self,t:str):
+		for loc in self.loc_list:
+			if (loc.loc_type == t) and (len(loc.people) < loc.capacity):
+				return loc
+
+	'''
+	returns the unique school location (assigns it if it doesn't exist)
+	'''
+	def get_school(self,max_size):
+		#TODO: make sure this function is called before we assign any workplaces
+		for loc in self.loc_list:
+			if loc.is_school:
+				return loc
+
+		#ok, so no school exists. we need to find one. ideally, we'll find one that already has enough capacity, but if all the offices are too small, take the biggest one and make its capacity equal to the max size we were given
+		office_max_idx = -1
+		office_max_cap = -float('inf')
+		office_min_over_spec_idx = -1	#the office which has the smallest capacity that is higher than max_size
+		office_min_over_spec_cap = float('inf')
+		for i,loc in enumerate(self.loc_list):
+			if loc.loc_type == 'office':
+				if (loc.capacity >= max_size) and (loc.capacity < office_min_over_spec_cap):#then this one will do
+					office_min_over_spec_idx = i
+					office_min_over_spec_cap = loc.capacity
+				if loc.capacity > office_max_cap:
+					office_max_idx = i
+					office_max_cap = loc.capacity
+
+		if office_min_over_spec_idx != -1:#then we already had a big enough one, use it
+			self.loc_list[office_min_over_spec_idx].is_school = True
+			return self.loc_list[office_min_over_spec_idx]
+		else:#use the biggest one
+			assert(office_max_idx != -1)
+			self.loc_list[office_max_idx].is_school = True
+			self.loc_list[office_max_idx].capacity = max_size
+			return self.loc_list[office_max_idx]
+
+
+	'''
+	This is used when putting people on the map initially if they are homeless
+	'''
+	def arrive_at_random_nonfull_public_location(self,p):
+		from PersonState import Person
+		for loc in self.loc_list:
+			if (loc.loc_type == 'public') and (loc.arrive(p)):
+				return#side effects of loc.arrive are that the person is now at that location iff there was capacity for them

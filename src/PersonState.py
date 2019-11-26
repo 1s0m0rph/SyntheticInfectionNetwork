@@ -67,20 +67,27 @@ def tconv(tst: str):
 class Person:
 	PERSON_ID_COUNTER = 0  # used for comparisons of equality between person objects
 
+	from Map import Map
+
 	"""
 	We only require that each person has a home. If that's all they have they never actually leave except to go to the store to get food.
 	"""
-	def __init__(self, home, age: int):
+	def __init__(self, home, M:Map):
 		# general demo/biographical info
 		self.id = Person.PERSON_ID_COUNTER
 		Person.PERSON_ID_COUNTER += 1
 		self.home = home
-		self.age = age
-		self.currentLocation = None
-		self.set_current_location(home)
-		if self.currentLocation is None:
-			self.set_current_location(public)
+		if home is not None:
+			self.currentLocation = None
+			self.set_current_location(home)
+			if self.currentLocation is None:
+				raise AttributeError(str(self) + "'s home does not have enough capacity for all its inhabitants.")
+		else:
+			#this person is homeless, so plonk them down some random public place
+			self.currentLocation = M.arrive_at_random_nonfull_public_location(self)
+
 		self.currentActivity = Activity('idle')
+		self.age = -1
 		self.workplace = None  # or school
 		self.work_schedule = None #2-tuple of time -- when I'm at "work"
 		self.sleep_schedule = (tconv('22'),tconv('8'))# we assume, in general, everyone is asleep between 10pm and 8am
@@ -99,8 +106,15 @@ class Person:
 		self.disease_affinity_mod = 0#how much less likely am I to interact with someone given that I'm infected by *some* disease
 		self.diseasesVaccinatable = {}#set of diseases for which I can (or am willing to) be vaccinated for
 
+		#map info
+		self.M = M
+
 	def __repr__(self):
 		return "Person " + str(self.id)
+
+	def set_workplace(self,wp):
+		if self.home is not None:#assumption is that homeless people do not have jobs
+			self.workplace = wp
 
 	"""
 	set our location to this and notify that location that we have arrived (also notify our current one that we are leaving), do not change location if the new location is full
@@ -162,7 +176,7 @@ class Person:
 			self.currentLocation = self.currentActivity.path.pop()#get the next location we travel through to get where we're going
 
 		elif self.currentActivity.activity_type == 'talking':
-			pass
+			pass#TODO: infection logic here?
 
 		self.currentActivity.time_doing += 1  # we have now been doing this for one time step
 
@@ -209,11 +223,12 @@ class Person:
 		if (self.currentActivity.activity_type == 'traveling') and (self.currentActivity.to == place):
 			return self.currentActivity  # we're already going there
 
-		if self.currentLocation.loc_type != 'public':
-			self.set_current_location(public)  # TODO: set our location to be the nearest "public" one
 		act = Activity('traveling')
-		# TODO: precalculate travel path
+		#get the path from the map
+		path = self.M.get_path(self.currentLocation,place)
+
 		act.to = place
+		act.path = path
 		return act
 
 
@@ -464,23 +479,96 @@ def calc_bfs_dist(start, type, target_person):
 
 
 """
-Tests whether the given time lies between the given times
+A class which allows for the creation of populations of people, along with all of their parameters, including the social networks
 
-times are all in minutes past midnight, with a max value of 23*60 + 59 =  1439
+In order to do this, we need:
+	a map
+	the number of people to generate
+	the average number of friends f_hat
+	average number of coworkers c_hat
+	age distribution
+	average number of preferred locations (Person.places)
+	probability of homelessness
+	hygiene distribution
+	proportion of population with partners (probability that a given person has a partner)
+	the maximum number of people to generate that are in school
 """
-def time_within_tuple(time,tup):
-	assert(time < TIME_STEPS_PER_DAY)
-	assert(tup[0] < TIME_STEPS_PER_DAY)
-	assert(tup[1] < TIME_STEPS_PER_DAY)
-	assert(time >= 0)
-	assert(tup[0] >= 0)
-	assert(tup[1] >= 0)
-	#preconditions ^^
+class PopulationBuilder:
 
-	if tup[0] > tup[1]:#then this tuple spans the midnight hour
-		return (time >= tup[0]) or (time <= tup[1])
+	from Map import Map
 
-	return (time >= tup[0]) and (time <= tup[1])
+	def __init__(self):
+		#defined by the user
+		self.M = None
+		self.N = -1
+		self.fh = -1
+		self.ch = -1
+		self.age_dist = None			#function from () -> int
+		self.school_range = None		#tuple of ages, between which people are in school (e.g. (0,18) means everyone from age 0 to age 18 is in school)
+		self.avg_places = -1
+		self.homeless_prob = -1
+		self.hygiene_dist = None 		#this should be a function that, when queried gives a hygiene
+		self.prob_has_partner = -1
+		self.max_school_size = 0
+
+
+		#logical variables
+		self.current_school_people = 0	#how many people are currently in school
+
+
+	def set_map(self,M:Map):
+		self.M = M
+
+	def set_N(self,N:int):
+		self.N = N
+
+	def set_avg_friends(self,fh:float):
+		self.fh = fh
+
+	def set_avg_coworkers(self,ch:float):
+		self.ch = ch
+
+	def set_age_distribution(self,ad):
+		self.age_dist = ad
+
+	def set_average_preferred_locations(self,avg_places:float):
+		self.avg_places = avg_places
+
+	def set_homeless_probability(self,hp:float):
+		self.homeless_prob = hp
+
+	def set_hygiene_distribution(self,hd):
+		self.hygiene_dist = hd
+
+	def set_has_partner_probability(self,hpp:float):
+		self.prob_has_partner = hpp
+
+	def set_school_age_range(self,sar:tuple):
+		self.school_range = sar
+
+	def set_max_people_in_school(self,s:int):
+		self.max_school_size = s
+
+
+	"""
+	Assign all of the primitive details randomly to this person (they already need to have a home)
+		age
+		workplace
+		places
+	"""
+	def assign_primitive_details(self,p:Person):
+		p.age = self.age_dist()
+		if (p.age >= self.school_range[0]) and (p.age <= self.school_range[1]):
+			if self.current_school_people >= self.max_school_size:
+				#then we already have enough school people, add the oldest school age to this to make sure this person isn't in school
+				p.age += self.school_range[1]
+			else:
+				#age is valid now
+				#then this person is in school
+				p.workplace = self.M.get_school(self.max_school_size)
+
+
+		#TODO: finish the assign primitive details function
 
 
 """
@@ -500,16 +588,19 @@ LOCATION_TYPES = [
 
 class Location:
 
+	LOCATION_ID_COUNTER = 0#for giving unique IDs to locations
+
 	"""
 	capacity indicates how many people the location can contain at most
-	type is mostly for convenience so we know what kind of location it is:
-		'spectator' (theater/sports event/concert/movie theater), 'convention', 'restaurant', 'shop', 'public' (park, town square; this will be used to move people between other locations), 'casino' ,
-		'home', 'school', 'vehicle'
+	type is mostly for convenience so we know what kind of location it is
 	"""
 	def __init__(self,loc_type,capacity=-1):
 		self.people = []
 		self.capacity = capacity
 		self.loc_type = loc_type
+		self.id = Location.LOCATION_ID_COUNTER
+		Location.LOCATION_ID_COUNTER += 1
+		self.is_school = False
 
 		self.adj_locs = set()#what locations are adjacent to me?
 		self.travel_time = -1#how long does it take to travel through me? this will be proportional to size
@@ -521,12 +612,13 @@ class Location:
 
 	def arrive(self,p: Person):
 		if len(self.people) >= self.capacity:#we can't take this person on, reject them
-			return
+			return False
 
 		if p.currentLocation is not None:
 			p.currentLocation.people.remove(p)
 		self.people.append(p)
 		p.currentLocation = self
+		return True
 
 	"""
 	Do a round of infections with the people here now
@@ -557,7 +649,7 @@ class Location:
 		return rset
 
 	def __repr__(self):
-		return 'Location of type ' + self.loc_type
+		return 'Location of type ' + self.loc_type + ' with id ' + str(self.id)
 
 
 """
@@ -623,6 +715,3 @@ class Activity:
 
 	def __repr__(self):
 		return 'Activity of type ' + self.activity_type + ('' if self.to is None else ' (to ' + str(self.to) + ')')
-
-#static "public" location
-public = Location('public',float('inf'))#TODO: make this inherited from the general simulation/utils, also change the float inf to int

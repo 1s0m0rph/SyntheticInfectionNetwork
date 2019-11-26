@@ -100,3 +100,22 @@ def pad(s:str,l:int,withch='0',at_beginning=True):
 		else:
 			s = s + withch
 	return s
+
+"""
+Tests whether the given time lies between the given times
+
+times are all in minutes past midnight, with a max value of 23*60 + 59 =  1439
+"""
+def time_within_tuple(time,tup):
+	assert(time < TIME_STEPS_PER_DAY)
+	assert(tup[0] < TIME_STEPS_PER_DAY)
+	assert(tup[1] < TIME_STEPS_PER_DAY)
+	assert(time >= 0)
+	assert(tup[0] >= 0)
+	assert(tup[1] >= 0)
+	#preconditions ^^
+
+	if tup[0] > tup[1]:#then this tuple spans the midnight hour
+		return (time >= tup[0]) or (time <= tup[1])
+
+	return (time >= tup[0]) and (time <= tup[1])
