@@ -92,23 +92,30 @@ class TestPerson(TestCase):
 		#more complex requires some movement
 		p0.set_current_location(test_home)
 		zf_aff = p0.affinity(p5)
-		np.testing.assert_almost_equal(zf_aff, 0.06388888888888888)
+		np.testing.assert_almost_equal(zf_aff, 0.04444444444444446)
 		p0.set_current_location(test_wp)
 
 
 
 	def test_action_transition(self):
-		test_home = Location('home',8)
-		test_wp = Location('casino',300)
+		# use the map reader since making one of these by hand is going to be a pain
+		from Map import MapReader
+		mr = MapReader(PUBLIC_BLOCK_SIZE=(2, 2), CAPACITY_PER_PIXEL=2, TIME_STEP_PER_PIXEL=2)
+		m = mr.create_map_from_file('../test_map_small.png')
+		test_home = m.loc_list[42]  # this is the home which is down-right of the top-left home (9th cell if counting left-right, top-bottom)
+		test_wp = m.loc_list[175]  # this is the shop in the bottom right corner
+		test_wp1 = m.loc_list[119]  # this is the L-shaped office
 
-		p0 = Person(test_home, 0)
-		p1 = Person(test_home, 1)
-		p2 = Person(test_home, 2)
-		p3 = Person(test_home, 3)
-		p4 = Person(test_home, 4)
-		p5 = Person(test_home, 5)
-		p6 = Person(test_home, 6)
-		p7 = Person(test_home, 7)
+		np.random.seed(0)
+
+		p0 = Person(test_home, m)
+		p1 = Person(test_home, m)
+		p2 = Person(test_home, m)
+		p3 = Person(test_home, m)
+		p4 = Person(test_home, m)
+		p5 = Person(test_home, m)
+		p6 = Person(test_home, m)
+		p7 = Person(test_home, m)
 
 		p0.friends = [p1, p2, p3, p4]
 		p1.friends = [p0, p2, p4, p6]
@@ -167,7 +174,7 @@ class TestPerson(TestCase):
 		tmp = Activity('talking')
 		tmp.to = p0
 		p2.currentActivity = tmp
-		
+
 		for t in range(tconv('09'),tconv('09:06')):
 			for p in [p0, p1, p2, p3, p4, p5, p6, p7]:
 				p.action_transition(t)#do 5 transitions per person for 5 different values of t

@@ -269,8 +269,6 @@ This consists essentially of a network of locations that we can travel between w
 """
 class Map:
 
-	from PersonState import Location
-
 	TIME_STEP_PER_PIXEL = 1  # how many time steps does it take to traverse 1 pixel?
 
 	def __init__(self,loc_list,TIME_STEP_PER_PIXEL=None):
@@ -290,8 +288,9 @@ class Map:
 		h (parameter) is the heuristic function
 	
 	because the map isn't perfectly represented by such a heuristic, it's technically not admissable, so we're not guaranteed optimality. That doesn't really matter since we only really care that people get from point a to point b and not so much how fast it takes them but how much we spend doing the calculation (euclidean is at least closer to being admissable, but since it generally visits like 2x as many places, we're using manhattan)
+	
 	'''
-	def get_path(self,a:Location,b:Location,h=manhattan_distance,verbose=False):
+	def get_path(self,a,b,h=manhattan_distance,verbose=False):
 		if a == b:
 			return []#we're already there
 		path = []
@@ -396,7 +395,6 @@ class Map:
 	This is used when putting people on the map initially if they are homeless
 	'''
 	def arrive_at_random_nonfull_public_location(self,p):
-		from PersonState import Person
 		for loc in self.loc_list:
 			if (loc.loc_type == 'public') and (loc.arrive(p)):
 				return#side effects of loc.arrive are that the person is now at that location iff there was capacity for them

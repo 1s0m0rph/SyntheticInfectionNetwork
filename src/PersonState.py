@@ -109,6 +109,9 @@ class Person:
 		#map info
 		self.M = M
 
+		#movement info
+		self.travel_counter = 0	#how many time steps have we spent in the current location on our way to the destination?
+
 	def __repr__(self):
 		return "Person " + str(self.id)
 
@@ -148,18 +151,13 @@ class Person:
 		rolling_prob = 0.
 		cw_dist = calc_bfs_dist(self,'work', person)#distance on the coworker network
 		fr_dist = calc_bfs_dist(self,'friend',person)#distance on the friend network
-		fam_dist = calc_bfs_dist(self,'family',person)#distance on the family network
 		is_friend_first = fr_dist <= cw_dist#I see this person more as a friend than as a coworker
-		is_family_first = fam_dist <= fr_dist#I see this person more as family than as a friend (family-to-coworker relations are irrelevant)
 
 		if self.currentLocation == self.workplace:
 			#figure out how far apart these two are in the coworker network using bfs
 
 			cw_aff = aff_decay(0.7,0.1)(cw_dist)#70% chance to interact with a direct coworker, 10% chance with a coworker-of-a-coworker. exp decay from there
 			rolling_prob += cw_aff
-			if is_family_first:
-				fam_aff = -aff_decay(0.3,0.05)(fam_dist)
-				rolling_prob = weighted_prob_combination(rolling_prob,0.75,fam_aff,0.25)
 			if is_friend_first:
 				fr_aff = aff_decay(0.75,0.2)(fr_dist)
 				rolling_prob = weighted_prob_combination(rolling_prob,0.6,fr_aff,0.4)
@@ -171,9 +169,6 @@ class Person:
 				cw_aff = -aff_decay(0.6,0.1)(cw_dist)
 				to_add = max(0, weighted_prob_combination(rolling_prob,0.8,cw_aff,0.2))
 				rolling_prob = to_add
-			elif is_family_first:
-				fam_aff = aff_decay(0.75,0.25)(fam_dist)
-				rolling_prob = weighted_prob_combination(rolling_prob,0.5,fam_aff,0.5)
 
 		return max(0,rolling_prob - (self.disease_affinity_mod if self.diseasesShowingSymptoms else 0))
 
@@ -185,12 +180,16 @@ class Person:
 	"""
 	def do_current_action(self):
 		if self.currentActivity.activity_type == 'traveling':#then we need to update our coords in the right direction
-			self.currentLocation = self.currentActivity.path.pop()#get the next location we travel through to get where we're going
+			if self.travel_counter >= self.currentLocation.travel_time:
+				self.currentLocation = self.currentActivity.path.pop()#get the next location we travel through to get where we're going
+				if self.currentLocation == self.currentActivity.to:#then we've arrived, go idle
+					self.currentActivity = Activity('idle')
+					return
+			else:
+				self.travel_counter += 1
 
 		elif self.currentActivity.activity_type == 'talking':
 			pass#TODO: infection logic here?
-
-		self.currentActivity.time_doing += 1  # we have now been doing this for one time step
 
 
 	"""
@@ -370,7 +369,7 @@ class Person:
 				if (self.currentActivity.activity_type == 'talking') or (self.currentActivity.activity_type == 'intimate'):
 					return self.continue_interaction()
 				else:
-					raise AttributeError("massive wat -- we can't be traveling and be at home, this should never happen")
+					return self.currentActivity	#still traveling
 
 		#part 3: at a hospital
 		if self.currentLocation.loc_type == 'hospital':
@@ -469,8 +468,8 @@ def calc_bfs_dist(start, type, target_person):
 			neighbors = current.coworkers
 		elif type == 'friend':
 			neighbors = current.friends
-		elif type == 'family':
-			neighbors = current.family#problematic due to the different types of fam
+		# elif type == 'family':
+		# 	neighbors = current.family#problematic due to the different types of fam
 		else:
 			raise AttributeError("Illegal argument to calc_bfs_dist, type should be work, family, or friend, not " + str(type))
 
@@ -754,8 +753,9 @@ class Location:
 		self.avg_age = -1
 		self.age_stdev = -1.
 
-		self.employees_residents = {}#if relevant
-		self.clientele = {}#who has this location listed as a `place`
+		#information on people habitually here
+		self.employees_residents = set()#if relevant
+		self.clientele = set()#who has this location listed as a `place`
 
 	'''
 	Given an age, what is the probability this location would be one of their places?
@@ -870,7 +870,6 @@ class Activity:
 		#this is the probability if we consider ONLY the activity and not the location or the person etc.
 		# self.transition_probabilities = dict(zip(self.ACTIVITY_TYPES,[0 for _ in range(len(self.ACTIVITY_TYPES))]))
 		self.activity_type = atype
-		self.time_doing = 0#how long has the person been doing this?
 
 		#if this is an action like walking, we need to know where we're going
 		#similarly, if we're talking to someone, we need to know who (these take up the same variable because they're mutually exclusive)
