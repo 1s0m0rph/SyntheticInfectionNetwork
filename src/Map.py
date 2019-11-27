@@ -275,11 +275,16 @@ class Map:
 
 		self.loc_list = loc_list#list of locations, they each maintain their own adjacencies
 
+		self.loc_map = {x.id:x for x in self.loc_list}
+
 		self.avg_ages_assigned = False
 
 		if TIME_STEP_PER_PIXEL is not None:
 			self.TIME_STEP_PER_PIXEL = TIME_STEP_PER_PIXEL
 
+
+	def get_location_by_loc_idx(self,lidx:int):
+		return self.loc_map[lidx]
 
 	'''
 	give me a path I can use to go from a to b along the map
@@ -400,15 +405,13 @@ class Map:
 				return#side effects of loc.arrive are that the person is now at that location iff there was capacity for them
 
 	'''
-	People can work anywhere but 'public' locations.
-	
-	this will return the list of nonpublic locations as well to speed up computation
+	this will return the list of workable locations as well to speed up computation
 	'''
-	def get_random_workable_location(self,non_public = None):
-		if non_public is None:
-			non_public = list(map(lambda x: x.loc_type != 'public', self.loc_list))
+	def get_random_workable_location(self, workable = None):
+		if workable is None:
+			workable = list(filter(lambda x: x.loc_type in WORKABLE_LOCATION_TYPES, self.loc_list))
 
-		return np.random.choice(non_public),non_public
+		return np.random.choice(workable), workable
 
 	'''
 	Given a distribution function () -> int, assign to each (relevant) location an average age
@@ -450,7 +453,7 @@ class Map:
 
 	def get_random_house(self,houses=None):
 		if houses is None:
-			houses = list(map(lambda x: x.loc_type == 'home', self.loc_list))
+			houses = list(filter(lambda x: x.loc_type == 'home', self.loc_list))
 
 		hidx = np.random.choice(range(len(houses)))
 		h = houses[hidx]

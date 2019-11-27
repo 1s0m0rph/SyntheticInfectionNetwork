@@ -36,33 +36,8 @@ essentially, we're modeling the probability of interacting between two people as
 
 """
 import random as rnd
-import re
 from SINUtil import *
 
-
-"""
-Given a "time string" (HH:MM:SS, HH:MM, or just HH), convert that string into the equivalent number of time steps after midnight
-"""
-def tconv(tst: str):
-	hhmmss = re.match(r'([0-9]{1,2}):([0-9]{1,2}):([0-9]{1,2})',tst)
-	hhmm = re.match(r'([0-9]{1,2}):([0-9]{1,2})', tst)
-	hh = re.match(r'([0-9]{1,2})', tst)
-	h = 0.
-	m = 0.
-	s = 0.
-	if hhmmss:
-		h = float(hhmmss.group(1))
-		m = float(hhmmss.group(2))
-		s = float(hhmmss.group(3))
-	elif hhmm:
-		h = float(hhmm.group(1))
-		m = float(hhmm.group(2))
-	elif hh:
-		h = float(hh.group(1))
-	else:
-		raise AttributeError('time string ' + tst + ' is not of the format HH:MM:SS, HH:MM, or HH')
-
-	return int((TIME_STEPS_PER_DAY / 24.)*h + (TIME_STEPS_PER_DAY / 1440.)*m + (TIME_STEPS_PER_DAY / 86400.)*s)
 
 class Person:
 	PERSON_ID_COUNTER = 0  # used for comparisons of equality between person objects
@@ -102,8 +77,7 @@ class Person:
 		self.diseasesShowingSymptoms = False
 
 		#behavior info
-		self.hand_wash_coef = 0#given that I'm interacting with someone, what's the probability I've washed my hands first?
-		self.disease_affinity_mod = 0#how much less likely am I to interact with someone given that I'm infected by *some* disease
+		self.hygiene_coef = 0#given that I'm interacting with someone, what's the probability I've washed my hands first?
 		self.diseasesVaccinatable = set()#set of diseases for which I can (or am willing to) be vaccinated for
 
 		#map info
@@ -116,6 +90,9 @@ class Person:
 		return "Person " + str(self.id)
 
 	def set_workplace(self,wp):
+		if self.workplace is not None:
+			#unset it
+			self.workplace.employees_residents.remove(self)
 		if (self.home is not None) and (wp is not None):#assumption is that homeless people do not have jobs
 			self.workplace = wp
 			wp.employees_residents.add(self)
@@ -126,6 +103,10 @@ class Person:
 			place.clientele.add(self)
 
 	def set_home(self,loc):
+		if self.home is not None:
+			#unset it
+			self.home.employees_residents.remove(self)
+			self.home.clientele.remove(self)
 		if loc is not None:
 			self.home = loc
 			loc.employees_residents.add(self)
@@ -146,7 +127,7 @@ class Person:
 			return 0#no affinity if we can't interact
 		is_partner = person in self.partners
 		if is_partner:
-			return max(0.,0.9 - (self.disease_affinity_mod if self.diseasesShowingSymptoms else 0.))#we like to interact with our partners
+			return max(0., 0.9 - (self.hygiene_coef if self.diseasesShowingSymptoms else 0.))#we like to interact with our partners
 
 		rolling_prob = 0.
 		cw_dist = calc_bfs_dist(self,'work', person)#distance on the coworker network
@@ -170,7 +151,7 @@ class Person:
 				to_add = max(0, weighted_prob_combination(rolling_prob,0.8,cw_aff,0.2))
 				rolling_prob = to_add
 
-		return max(0,rolling_prob - (self.disease_affinity_mod if self.diseasesShowingSymptoms else 0))
+		return max(0, rolling_prob - (self.hygiene_coef if self.diseasesShowingSymptoms else 0))
 
 	"""
 	"perform" the current action, if that requires anything
@@ -250,7 +231,7 @@ class Person:
 	"""
 	def pick_rtravel_loc(self):
 		#with probability dependent on if we're currently showing symptoms and our disease modifier, go home instead
-		hyg_prob = self.disease_affinity_mod if self.diseasesShowingSymptoms else 0
+		hyg_prob = self.hygiene_coef if self.diseasesShowingSymptoms else 0
 		if np.random.choice([True,False],[hyg_prob,1-hyg_prob]):
 			return self.home
 
@@ -508,38 +489,38 @@ class PopulationBuilder:
 
 	from Map import Map
 
-	def __init__(self):
+	def __init__(self, M:Map, N: int):
 		#defined by the user
-		self.M = None
-		self.N = -1
-		self.age_dist = None				#function from () -> int
-		self.hygiene_dist = None 			#this should be a function that, when queried gives a hygiene
-		self.location_ages_avg_dist = None
-		self.location_ages_stdev_dist = None
-		self.num_places_dist = None
-		self.coworkers_dist = None			#function from (number of employees) -> (number of coworkers)
-		self.friends_dist = None			#function from ((size of clientele)*(number of places for this person) = number of possible friends) -> (number of friends)
-		self.partners_dist = None			#function from (number of people in the house) -> (number of partners) <typically just returns 0 or 1 with some probability>
+		self.M = M
+		self.N = N
 
 		#optionally defined by the user (defaults defined here)
-		self.school_range = None			#tuple of ages, between which people are in school (e.g. (0,18) means everyone from age 0 to age 18 is in school)
+		self.age_dist = lambda: int(max(np.random.normal(38.2,22.7549),0))											#numbers from https://www.kff.org/other/state-indicator/distribution-by-age/ and https://www.cia.gov/library/publications/resources/the-world-factbook/geos/us.html
+		self.hygiene_dist = lambda age: np.random.uniform(0,1)													#simple model assumes perfectly uniform hygiene, but more complex ones should take age into account
+		self.location_ages_avg_dist = lambda: max(np.random.normal(20,15),0)									#normal distribution, mean 20 stdev 15 (years)
+		self.location_ages_stdev_dist = lambda: 5																#5 years stdev every time
+		self.coworkers_dist = lambda num_employees: min(max(int(np.random.normal(5,3)),0),num_employees)		#normal distribution, mean 5 stdev 3, >= 0
+		self.friends_dist = lambda possible_friends: min(max(int(np.random.normal(5,3)),0),possible_friends)	#normal distribution, mean 5 stdev 3, >= 0
+		self.partners_dist = lambda num_people_in_house: min(int(coinflip(0.05)),num_people_in_house)			#5% chance of having one partner, 95% of not having any
+		self.num_places_dist = lambda: max(int(np.random.normal(3,2)),0)										#normal distribution, mean = 3, stdev = 2
+		self.school_range = (0,0)																				#tuple of ages, between which people are in school (e.g. (0,18) means everyone from age 0 to age 18 is in school)
 		self.max_school_size = 0
 		self.avg_places = 0
 		self.homeless_prob = 0.
 		self.jobless_prob = 0.
+		self.work_begin_avg_dist = lambda: tconv(str(np.random.choice(range(0,24))))										#uniform distribution, starting on the hour
+		self.work_duration_avg_dist = lambda: tconv(str(np.random.choice(range(2,12))))										#uniform from 2 hours to 12 hours
+		self.work_begin_stdev_dist = lambda: tconv("05")																	#always 5 hours
+		self.work_duration_stdev_dist = lambda: tconv("01")																	#always 1 hour
+		self.sleep_begin_dist = lambda work_time_tuple: int(np.random.normal(work_time_tuple[1] + tconv("03"),tconv("00:30")))	#3 hours after work ends on average
+		self.sleep_duration_dist = lambda: int(np.random.normal(tconv("07"),tconv("01")))
 
 
 		#logical variables
 		self.current_school_people = 0		#how many people are currently in school
-		self.non_public_locations = None	#locations that are not public (i.e. workable)
+		self.workable_locations = None	#locations that are not public (i.e. workable)
 		self.houses = None
 
-
-	def set_map(self,M:Map):
-		self.M = M
-
-	def set_N(self,N:int):
-		self.N = N
 
 	def set_num_friends_distribution(self,dist):
 		self.friends_dist = dist
@@ -580,6 +561,23 @@ class PopulationBuilder:
 	def set_partners_distribution(self,dist):
 		self.partners_dist = dist
 
+	def set_work_start_time_average_distribution(self,dist):
+		self.work_begin_avg_dist = dist
+
+	def set_work_duration_average_distribution(self,dist):
+		self.work_duration_avg_dist = dist
+
+	def set_work_start_time_stdev_distribution(self,dist):
+		self.work_begin_stdev_dist = dist
+
+	def set_work_duration_stdev_distribution(self,dist):
+		self.work_duration_stdev_dist = dist
+
+	def set_sleep_begin_time_distribution(self,dist):
+		self.sleep_begin_dist = dist
+
+	def set_sleep_duration_distribution(self,dist):
+		self.sleep_duration_dist = dist
 
 	"""
 	Assign all of the primitive details randomly to this person (they already need to have a home)
@@ -596,12 +594,12 @@ class PopulationBuilder:
 			else:
 				#age is valid now
 				#then this person is in school
-				p.set_workplace(self.M.get_school(self.max_school_size))
+				p.set_workplace(self.M.get_school())
 
 		if (not ((p.age >= self.school_range[0]) and (p.age <= self.school_range[1]))) and (p.home is not None):
 			if not coinflip(self.jobless_prob):
 				#this person is not in school and is not homeless and is not jobless, find a workplace
-				wp,self.non_public_locations = self.M.get_random_workable_location(non_public=self.non_public_locations)
+				wp,self.workable_locations = self.M.get_random_workable_location(workable=self.workable_locations)
 				p.set_workplace(wp)
 
 		#now the person has a workplace (if relevant) and an age, assign their locations
@@ -609,8 +607,29 @@ class PopulationBuilder:
 		for _ in range(nlocs):
 			self.M.add_random_placable_location(p,self.location_ages_avg_dist,self.location_ages_stdev_dist)
 
-		#TODO: add sleep schedule and work schedule generation here
 
+		#hygiene
+		p.hygiene_coef = self.hygiene_dist(p.age)
+
+		#work schedule
+		if p.workplace is not None:
+			if p.workplace.avg_work_begin_time == -1:
+				#assign this as needed
+				p.workplace.avg_work_begin_time = self.work_begin_avg_dist()
+				p.workplace.work_begin_stdev = self.work_begin_stdev_dist()
+				p.workplace.avg_work_duration = self.work_duration_avg_dist()
+				p.workplace.work_duration_stdev = self.work_duration_stdev_dist()
+			work_begin_time = negsafe_mod(int(np.random.normal(p.workplace.avg_work_begin_time,p.workplace.work_begin_stdev)),TIME_STEPS_PER_DAY)
+			work_duration = max(int(np.random.normal(p.workplace.avg_work_duration,p.workplace.work_duration_stdev)),0)
+			work_end_time = negsafe_mod((work_begin_time + work_duration), TIME_STEPS_PER_DAY)
+			p.work_schedule = (work_begin_time,work_end_time)
+		else:
+			p.work_schedule = (0,0)
+
+		sleep_begin_time = self.sleep_begin_dist(p.work_schedule)
+		sleep_duration = self.sleep_duration_dist()
+		sleep_end_time = negsafe_mod((sleep_begin_time + sleep_duration) ,TIME_STEPS_PER_DAY)
+		p.sleep_schedule = (sleep_begin_time,sleep_end_time)
 
 	'''
 	The process for this is generally to make a random graph as defined in the PNAS paper (2566) on the people who work at this location, with the degree distribution
@@ -628,11 +647,13 @@ class PopulationBuilder:
 			return
 
 		k = self.coworkers_dist(len(p.workplace.employees_residents))
-		assign_to = np.random.choice(p.workplace.employees_residents,size=k)
+		assign_to = np.random.choice(list(p.workplace.employees_residents),size=k)
 		for emp in assign_to:
 			p.coworkers.add(emp)
 			if BIDIRECTIONAL_COWORKERS:
 				emp.coworkers.add(p)
+
+		return p
 
 	'''
 	Among all of the people who live at this place, assign k of them to be partners of p, where k is from the partners distribution
@@ -643,10 +664,12 @@ class PopulationBuilder:
 			return
 
 		k = self.partners_dist(len(p.home.employees_residents))
-		assign_to = np.random.choice(p.home.employees_residents,size=k)
+		assign_to = np.random.choice(list(p.home.employees_residents),size=k)
 		for oth in assign_to:
 			p.partners.add(oth)
 			oth.partners.add(p)
+
+		return p
 
 	'''
 	first pick a number of friends k for this person to have, k from the friends dist
@@ -659,24 +682,28 @@ class PopulationBuilder:
 			return
 
 		#first figure out how many possible friends we could have
-		possible = len(p.home.employees_residents)
+		possible = p.home.employees_residents
+		possible.remove(p)#not myself
 		for place in p.places:
-			possible += len(place.clientele)
-		k = self.friends_dist(possible)
+			possible = possible.union(place.clientele)
+		k = self.friends_dist(len(possible))
 		assigned = 0
-		pick_from = set(p.home).union(p.places)
+		pick_from = {p.home}.union(p.places)
 		while (assigned < k) and (len(pick_from) > 0):
 			#pick a random location in our places
-			loc = np.random.choice(pick_from)
+			loc = np.random.choice(list(pick_from))
 			possible_friends = loc.clientele - p.friends
 			if len(possible_friends) > 0:
-				assign = np.random.choice(possible_friends)
+				assign = np.random.choice(list(possible_friends))
 				p.friends.add(assign)
 				if BIDIRECTIONAL_FRIENDS:
 					assign.friends.add(p)
+				assigned += 1
 			else:
 				#there's no one here we can be friends with, so we need to not pick this location again
-				pick_from = pick_from.remove(loc)
+				pick_from.remove(loc)
+
+		return p
 
 
 	def create_population(self):
@@ -702,11 +729,13 @@ class PopulationBuilder:
 			plist.append(p)
 			#nothing else can be done in this loop since we need everyone's primitives to be defined before they can be assigned friends etc.
 
-		for p in plist:
+		for i,p in enumerate(plist):
 			#now that all the primitive details are in, we can assign the network details
-			self.assign_coworkers(p)
-			self.assign_friends(p)
-			self.assign_partners(p)
+			plist[i] = self.assign_coworkers(p)
+			plist[i] = self.assign_friends(p)
+			plist[i] = self.assign_partners(p)
+
+		return plist
 
 
 
@@ -756,6 +785,12 @@ class Location:
 		#information on people habitually here
 		self.employees_residents = set()#if relevant
 		self.clientele = set()#who has this location listed as a `place`
+
+		#work info
+		self.avg_work_begin_time = -1
+		self.avg_work_duration = -1
+		self.work_begin_stdev = -1
+		self.work_duration_stdev = -1
 
 	'''
 	Given an age, what is the probability this location would be one of their places?
@@ -813,7 +848,7 @@ class Location:
 		return rset
 
 	def __repr__(self):
-		return 'Location of type ' + self.loc_type + ' with id ' + str(self.id)
+		return self.loc_type + ' ' + str(self.id)
 
 
 """

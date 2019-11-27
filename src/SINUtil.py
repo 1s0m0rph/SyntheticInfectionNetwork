@@ -16,12 +16,38 @@ HANDWASH_EFFECT_MODIFIERS = [[0.,-0.1],
 INTIMATE_EFFECT_MODIFIER = 0.2#how much more infectious things tend to be when people are intimate with infecteds
 
 PLACABLE_LOCATION_TYPES = {'convention','shop'}
+WORKABLE_LOCATION_TYPES = {'office','shop','convention','hospital'}
 
 BIDIRECTIONAL_COWORKERS = False
 BIDIRECTIONAL_FRIENDS = False
 
 #TODO: move to the actual simulation part
 diseases_active = {0:None}#mapping of disease id to the actual disease object
+
+"""
+Given a "time string" (HH:MM:SS, HH:MM, or just HH), convert that string into the equivalent number of time steps after midnight
+"""
+def tconv(tst: str) -> int:
+	import re
+	hhmmss = re.match(r'([0-9]{1,2}):([0-9]{1,2}):([0-9]{1,2})',tst)
+	hhmm = re.match(r'([0-9]{1,2}):([0-9]{1,2})', tst)
+	hh = re.match(r'([0-9]{1,2})', tst)
+	h = 0.
+	m = 0.
+	s = 0.
+	if hhmmss:
+		h = float(hhmmss.group(1))
+		m = float(hhmmss.group(2))
+		s = float(hhmmss.group(3))
+	elif hhmm:
+		h = float(hhmm.group(1))
+		m = float(hhmm.group(2))
+	elif hh:
+		h = float(hh.group(1))
+	else:
+		raise AttributeError('time string ' + tst + ' is not of the format HH:MM:SS, HH:MM, or HH')
+
+	return int((TIME_STEPS_PER_DAY / 24.)*h + (TIME_STEPS_PER_DAY / 1440.)*m + (TIME_STEPS_PER_DAY / 86400.)*s)
 
 def swap(a,idx1,idx2):
 	temp = a[idx1]
@@ -124,3 +150,11 @@ def time_within_tuple(time,tup):
 		return (time >= tup[0]) or (time <= tup[1])
 
 	return (time >= tup[0]) and (time <= tup[1])
+
+"""
+negative safe mod function, will return values in [0,n-1] that are congruent to a mod n 
+"""
+def negsafe_mod(a:int,n:int):
+	if a < 0:
+		return negsafe_mod(a+n,n)	#n cong 0 mod n, so this doesn't change our equivalence class
+	return a % n
