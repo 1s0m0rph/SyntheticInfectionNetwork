@@ -13,8 +13,8 @@ LOC_TYPE_COLORS = {'home':'7f0000',
 					   'shop':'0000ff',
 					   'public':'000000',
 					   'hospital':'dc2323',
-					   'VOID':'ffffff',#this is a special type used for when you're too lazy to actually fill in all the pixels; it is ignored
-				   	   'PROC_FINISHED':'f0f0f0'#this is a special type used to indicate that processing for this pixel is finished
+					   'VOID':'ffffff',#this is a special edge_type used for when you're too lazy to actually fill in all the pixels; it is ignored
+				   	   'PROC_FINISHED':'f0f0f0'#this is a special edge_type used to indicate that processing for this pixel is finished
 					   }
 
 LTC_INV = {LOC_TYPE_COLORS[k]:k for k in LOC_TYPE_COLORS}#this is just the inverse of the color map
@@ -56,7 +56,7 @@ class MapReader:
 
 
 	def __init__(self,PUBLIC_BLOCK_SIZE=None,CAPACITY_PER_PIXEL=None,TIME_STEP_PER_PIXEL=None):
-		self.R_LTC_INTERNAL = {LOC_TYPE_INDEX[k]:k for k in LOC_TYPE_INDEX}#this is just the inverse of the type map
+		self.R_LTC_INTERNAL = {LOC_TYPE_INDEX[k]:k for k in LOC_TYPE_INDEX}#this is just the inverse of the edge_type map
 		self.img = None
 		self.next_loc_idx = len(LOC_TYPE_COLORS)#basically, what's the next location index we'll assign?
 
@@ -131,7 +131,7 @@ class MapReader:
 				if not ((jx < llimx) or (jy < llimy) or (jx >= endx) or (jy >= endy)):
 					#then this is actually a neighbor and is in the image (not off the edge)
 					if self.img[jy][jx] == ltype_i:#this check basically does the seen thing for us, since we're changing their numbers around as we go
-						#then this pixel is of the right type, change its number
+						#then this pixel is of the right edge_type, change its number
 						self.img[jy][jx] = self.next_loc_idx
 						#and add it to the queue and the seen
 						travq.append((jx,jy))
@@ -178,7 +178,7 @@ class MapReader:
 	'''
 	Using the locs in location list, assign adjacencies based on the same edge properties
 
-	the process is to do a bfs on the type as when assigning numbers, but look for edges out of the same number group
+	the process is to do a bfs on the edge_type as when assigning numbers, but look for edges out of the same number group
 	'''
 	def assign_loc_adjacencies(self,startx,starty):
 		endx = len(self.img[0])
@@ -189,7 +189,7 @@ class MapReader:
 		loc_assign = self.img[starty][startx]
 		if (loc_assign == LOC_TYPE_INDEX['VOID']) or (loc_assign == LOC_TYPE_INDEX['PROC_FINISHED']):
 			return#nothing to do
-		assert(loc_assign not in LOC_TYPE_INDEX)#can't be an unassigned generic location type
+		assert(loc_assign not in LOC_TYPE_INDEX)#can't be an unassigned generic location edge_type
 
 		travq = [(startx, starty)]
 		self.img[starty][startx] = LOC_TYPE_INDEX['PROC_FINISHED']#meaning processing for this one is done
@@ -203,7 +203,7 @@ class MapReader:
 					# then this is actually a neighbor and is in the image (not off the edge)
 					jval = self.img[jy][jx]
 					if (jval != loc_assign) and (jval != LOC_TYPE_INDEX['VOID']) and (jval != LOC_TYPE_INDEX['PROC_FINISHED']):
-						# then this pixel is of the right type, assign its location to be adjacent to us
+						# then this pixel is of the right edge_type, assign its location to be adjacent to us
 
 						self.loc_list[jval - len(LOC_TYPE_COLORS)].adj_locs.add(self.loc_list[loc_assign - len(LOC_TYPE_COLORS)])
 						self.loc_list[loc_assign - len(LOC_TYPE_COLORS)].adj_locs.add(self.loc_list[jval - len(LOC_TYPE_COLORS)])
@@ -311,7 +311,7 @@ class Map:
 					dist.update({current_loc:current_loc.travel_time})
 					break
 			if len(path) == 0:
-				raise AttributeError("Location " + str(a) + " is not adjacent to a location of type public.")
+				raise AttributeError("Location " + str(a) + " is not adjacent to a location of edge_type public.")
 
 
 		tb = 1#tiebreaker for the heap
@@ -352,7 +352,7 @@ class Map:
 		return path
 
 	'''
-	returns a random nonfull location of type t
+	returns a random nonfull location of edge_type t
 	'''
 	def get_random_location(self,t:str):
 		for loc in self.loc_list:
@@ -457,7 +457,7 @@ class Map:
 
 		hidx = np.random.choice(range(len(houses)))
 		h = houses[hidx]
-		while h.is_full():
+		while (h.is_full()) and (len(houses) > 1):
 			del houses[hidx]
 			hidx = np.random.choice(range(len(houses)))
 			h = houses[hidx]

@@ -87,6 +87,11 @@ class TestPopulationBuilder(TestCase):
 
 	def test_create_population(self):
 		#BIG MAMMA
+		np.random.seed(0)
 		pb = PopulationBuilder(self.M,100)
 		plist = pb.create_population()
+		for person in plist:
+			if person.home is not None:
+				assert(person in person.home.clientele)
+				assert(person in person.home.employees_residents)
 		pass

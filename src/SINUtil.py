@@ -8,7 +8,26 @@ PROBABILITY_TRAVEL_SOMEWHERE = 0.2#per time step, what is the baseline probabili
 AVERAGE_HOME_IDLE_TIME = 60#time steps. the average amount of time someone will spend idle at home before going somewhere
 SSORT_LEVELS = 0#how many levels of quicksort partition should I apply to get the affinity order
 
-DISEASE_STATES = {'S','II','IS','R','VS','VU','D'}#Susceptible; Infected, Infectious; Infected, showing Symptoms; Recovered; Vaccinated, Susceptible; Vaccinated, unsusceptible; Dead
+DISEASE_STATES = {'S',	#susceptible
+				  'II',	#infected, infectious
+				  'VII',#vaccinated, infected, infectious
+				  'IS',	#infected, showing symptoms
+				  'VIS',#vaccinated, infected, showing symptoms
+				  'R',	#recovered
+				  'VR',	#vaccinated, recovered
+				  'VS',	#vaccinated, susceptible
+				  'VU',	#vaccinated, unsusceptible
+				  'D',	#dead
+				  'VD'	#vaccinated, dead
+				  }
+
+DISEASE_STATES_SUSCEPTIBLE = {'S','VS'}
+DISEASE_STATES_INFECTIOUS = {'II','VII','IS','VIS'}
+DISEASE_STATES_SYMPTOMATIC = {'IS','VIS'}
+DISEASE_STATES_VACCINATED = {'VII','VIS','VR','VS','VU','VD'}
+DISEASE_STATES_DEAD = {'D','VD'}
+DISEASE_STATES_FINAL = DISEASE_STATES - DISEASE_STATES_INFECTIOUS
+DISEASE_STATES_INITIAL = {'S','VU','VS'}
 
 HANDWASH_EFFECT_MODIFIERS = [[0.,-0.1],
 							 [-0.1,-0.5]]#modifiers for infectivity, given that (a,b) washed their hands
@@ -97,6 +116,7 @@ def weighted_prob_combination(p1,w1,p2,w2):
 	return p1*w1 + p2*w2
 
 def coinflip(p):
+	p = max(min(p,1),0)
 	return np.random.choice([True,False],p=[p,1-p])
 
 

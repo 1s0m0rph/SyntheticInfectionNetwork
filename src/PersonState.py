@@ -81,6 +81,7 @@ class Person:
 		#behavior info
 		self.hygiene_coef = 0#given that I'm interacting with someone, what's the probability I've washed my hands first?
 		self.diseasesVaccinatable = set()#set of diseases for which I can (or am willing to) be vaccinated for
+		self.interaction_time_infectable = 0#how long have I interacted with someone who could infect me?
 
 		#map info
 		self.M = M
@@ -91,13 +92,19 @@ class Person:
 	def __repr__(self):
 		return "Person " + str(self.id)
 
+	def any_infection_present(self):
+		for disease in self.disease_state:
+			if self.disease_state[disease] in DISEASE_STATES_INFECTIOUS:
+				return True
+		return False
+
 	def set_workplace(self,wp):
 		if self.workplace is not None:
 			#unset it
 			self.workplace.employees_residents.remove(self)
 		if (self.home is not None) and (wp is not None):#assumption is that homeless people do not have jobs
 			self.workplace = wp
-			wp.employees_residents.add(self)
+			self.workplace.employees_residents.add(self)
 
 	def add_place(self,place):
 		if place is not None:
@@ -111,8 +118,8 @@ class Person:
 			self.home.clientele.remove(self)
 		if loc is not None:
 			self.home = loc
-			loc.employees_residents.add(self)
-			loc.clientele.add(self)
+			self.home.employees_residents.add(self)
+			self.home.clientele.add(self)
 
 	def die(self):
 		self.is_dead = True
@@ -171,7 +178,10 @@ class Person:
 				to_add = max(0, weighted_prob_combination(rolling_prob,0.8,cw_aff,0.2))
 				rolling_prob = to_add
 
-		return max(0, rolling_prob - (self.hygiene_coef if self.diseasesShowingSymptoms else 0))
+		semifinal = max(0, rolling_prob - (self.hygiene_coef if self.diseasesShowingSymptoms else 0))
+		if semifinal == 0:
+			semifinal = 0.2#exploration reward
+		return semifinal
 
 	"""
 	"perform" the current action, if that requires anything
@@ -184,14 +194,18 @@ class Person:
 			return	#dead people don't do anything
 		if self.currentActivity.activity_type == 'traveling':#then we need to update our coords in the right direction
 			if self.travel_counter >= self.currentLocation.travel_time:
-				self.currentLocation = self.currentActivity.path.pop()#get the next location we travel through to get where we're going
+				self.set_current_location(self.currentActivity.path.pop())#get the next location we travel through to get where we're going
+				#^^^ really important we *set* the location here so that it registers us as being there
 				if self.currentLocation == self.currentActivity.to:#then we've arrived, go idle
 					self.currentActivity = Activity('idle')
 					return
 			else:
 				self.travel_counter += 1
 
-		elif self.currentActivity.activity_type == 'talking':
+		elif (self.currentActivity.activity_type == 'talking') or (self.currentActivity.activity_type == 'intimate'):
+			for disease in self.disease_state:
+				if (self.currentActivity.to.disease_state[disease] in DISEASE_STATES_INFECTIOUS) and (self.disease_state[disease] in DISEASE_STATES_SUSCEPTIBLE):
+					self.interaction_time_infectable += 1
 			pass#TODO: infection logic here?
 
 
@@ -262,19 +276,20 @@ class Person:
 			return None
 		#with probability dependent on if we're currently showing symptoms and our disease modifier, go home instead
 		hyg_prob = self.hygiene_coef if self.diseasesShowingSymptoms else 0
-		if np.random.choice([True,False],[hyg_prob,1-hyg_prob]):
+		if coinflip(hyg_prob):
 			return self.home
 
 		#otherwise, carry on
 		locs = self.places
-		best_loc = None
-		best_aff = -float('inf')
+		best_loc = self.currentLocation
+		best_aff = np.mean([self.affinity(p) for p in self.currentLocation.people])
 		for loc in locs:
-			#get this place's average affinity
-			avg_aff = np.mean([self.affinity(p) for p in loc.people])
-			if avg_aff > best_aff:
-				best_aff = avg_aff
-				best_loc = loc
+			if (not loc.is_empty) and (loc != best_loc):
+				#get this place's average affinity
+				avg_aff = np.mean([self.affinity(p) for p in loc.people])
+				if avg_aff > best_aff:
+					best_aff = avg_aff
+					best_loc = loc
 		return best_loc
 
 	def continue_interaction(self):
@@ -466,7 +481,7 @@ do a social network bfs either on the coworkers network, the family network, or 
 
 all we care about is how far apart we and the target are in this network
 """
-def calc_bfs_dist(start, type, target_person):
+def calc_bfs_dist(start, edge_type, target_person, depth=4):
 	if start == target_person:
 		return 0#why did this even get called?
 
@@ -474,34 +489,31 @@ def calc_bfs_dist(start, type, target_person):
 	current = start  # starting from me
 	contflag = True
 	dist_map = {start:0}
-	retdist = -1# standin for infinity -- they're not in this connected component
 
 	while contflag:
 
-		# figure out what type of neighbors we are looking for
-		if type == 'work':
+		# figure out what edge_type of neighbors we are looking for
+		if edge_type == 'work':
 			neighbors = current.coworkers
-		elif type == 'friend':
+		elif edge_type == 'friend':
 			neighbors = current.friends
-		# elif type == 'family':
-		# 	neighbors = current.family#problematic due to the different types of fam
 		else:
-			raise AttributeError("Illegal argument to calc_bfs_dist, type should be work, family, or friend, not " + str(type))
+			raise AttributeError("Illegal argument to calc_bfs_dist, edge_type should be work, family, or friend, not " + str(edge_type))
 
 		for n in neighbors:
 			if not n in dist_map:  # then this node hasn't been seen yet
 				if n.id == target_person.id:
-					retdist = dist_map[current]+1#ladies and gentlemen, we got 'em
-					break
+					return dist_map[current] + 1
 				dist_map.update({n:dist_map[current]+1})
-				pq.append(n)  # add n to the queue
+				if dist_map[n] < depth:
+					pq.append(n)  # add n to the queue
 
-		if (len(pq) == 0) or (retdist != -1):
+		if len(pq) == 0:
 			contflag = False
 		else:
 			current = pq.pop(0)
 
-	return float('inf') if retdist == -1 else retdist
+	return float('inf')
 
 
 """
@@ -668,7 +680,7 @@ class PopulationBuilder:
 		else:
 			person.work_schedule = (0, 0)
 
-		sleep_begin_time = self.sleep_begin_dist(person.work_schedule)
+		sleep_begin_time = negsafe_mod(self.sleep_begin_dist(person.work_schedule),TIME_STEPS_PER_DAY)
 		sleep_duration = self.sleep_duration_dist()
 		sleep_end_time = negsafe_mod((sleep_begin_time + sleep_duration) ,TIME_STEPS_PER_DAY)
 		person.sleep_schedule = (sleep_begin_time, sleep_end_time)
@@ -706,9 +718,10 @@ class PopulationBuilder:
 		k = self.coworkers_dist(len(p.workplace.employees_residents))
 		assign_to = np.random.choice(list(p.workplace.employees_residents),size=k)
 		for emp in assign_to:
-			p.coworkers.add(emp)
-			if BIDIRECTIONAL_COWORKERS:
-				emp.coworkers.add(p)
+			if emp != p:
+				p.coworkers.add(emp)
+				if BIDIRECTIONAL_COWORKERS:
+					emp.coworkers.add(p)
 
 		return p
 
@@ -723,8 +736,9 @@ class PopulationBuilder:
 		k = self.partners_dist(len(p.home.employees_residents))
 		assign_to = np.random.choice(list(p.home.employees_residents),size=k)
 		for oth in assign_to:
-			p.partners.add(oth)
-			oth.partners.add(p)
+			if oth != p:
+				p.partners.add(oth)
+				oth.partners.add(p)
 
 		return p
 
@@ -749,7 +763,7 @@ class PopulationBuilder:
 		while (assigned < k) and (len(pick_from) > 0):
 			#pick a random location in our places
 			loc = np.random.choice(list(pick_from))
-			possible_friends = loc.clientele - p.friends
+			possible_friends = loc.clientele - p.friends - {p}
 			if len(possible_friends) > 0:
 				assign = np.random.choice(list(possible_friends))
 				p.friends.add(assign)
@@ -788,6 +802,7 @@ class PopulationBuilder:
 
 		for i,p in enumerate(plist):
 			#now that all the primitive details are in, we can assign the network details
+			#FIXME: one of these functions removes people from employees_residents, particularly regarding homes (this makes killing people break everything!)
 			plist[i] = self.assign_coworkers(p)
 			plist[i] = self.assign_friends(p)
 			plist[i] = self.assign_partners(p)
@@ -808,7 +823,7 @@ LOCATION_TYPES = [
 	'convention',#a large gathering area (stadium convention center, etc.) for many people *some of whom may be outside of this city*  --> introduction vector (activity, not location) [lime green on map]
 	'shop',#any kind of place that can be entered by both employees and general people (includes restaurants etc.) [blue on map]
 	'public',#streets, plazas, parks -- anything that anyone can visit and no one can work at [black on map]
-	'hospital',#where the sick people be (technically a type of shop, but it's important enough to exist on its own) [red on map]
+	'hospital',#where the sick people be (technically a edge_type of shop, but it's important enough to exist on its own) [red on map]
 ]
 
 class Location:
@@ -865,6 +880,9 @@ class Location:
 	def is_full(self):
 		return len(self.people) >= self.capacity
 
+	def is_empty(self):
+		return len(self.people) <= 0
+
 
 	def arrive(self,p: Person):
 		if self.is_full():#we can't take this person on, reject them
@@ -891,17 +909,20 @@ class Location:
 	
 	"""
 	def infection_round(self):
-		# TODO: insert logic for infections in the general simulation code to wrap this
 		rset = set()
-		for a in self.people:
-			for b in self.people:
+		for i,a in enumerate(self.people):
+			for j in range(i,len(self.people)):
+				b = self.people[j]
 				if a != b:
 					for disease in a.disease_state:
 						if disease.infects(a,b):
 							rset.add((a,disease,b))
+							disease.infect(b)
 					for disease in b.disease_state:
 						if disease.infects(b,a):
 							rset.add((b,disease,a))
+							disease.infect(a)
+
 		return rset
 
 	def __repr__(self):
@@ -965,8 +986,8 @@ class Activity:
 
 		#if this is an action like walking, we need to know where we're going
 		#similarly, if we're talking to someone, we need to know who (these take up the same variable because they're mutually exclusive)
-		self.to = None#type = Location or Person
+		self.to = None#edge_type = Location or Person
 		self.path = []#travel path should be precalculated; consists of locations that we will visit on the way (this means public locations need to be split up into a network of small public locations)
 
 	def __repr__(self):
-		return 'Activity of type ' + self.activity_type + ('' if self.to is None else ' (to ' + str(self.to) + ')')
+		return self.activity_type + ('' if self.to is None else ' to ' + str(self.to))
