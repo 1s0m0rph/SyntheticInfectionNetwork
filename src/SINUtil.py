@@ -40,6 +40,8 @@ WORKABLE_LOCATION_TYPES = {'office','shop','convention','hospital'}
 BIDIRECTIONAL_COWORKERS = False
 BIDIRECTIONAL_FRIENDS = False
 
+INTERACTION_EXPLORATION_REWARD = 0.05
+
 """
 Given a "time string" (HH:MM:SS, HH:MM, or just HH), convert that string into the equivalent number of time steps after midnight
 """

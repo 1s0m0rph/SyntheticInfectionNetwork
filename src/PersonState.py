@@ -180,7 +180,7 @@ class Person:
 
 		semifinal = max(0, rolling_prob - (self.hygiene_coef if self.diseasesShowingSymptoms else 0))
 		if semifinal == 0:
-			semifinal = 0.2#exploration reward
+			semifinal = INTERACTION_EXPLORATION_REWARD#exploration reward
 		return semifinal
 
 	"""
@@ -753,7 +753,7 @@ class PopulationBuilder:
 			return
 
 		#first figure out how many possible friends we could have
-		possible = p.home.employees_residents
+		possible = p.home.employees_residents.copy()
 		possible.remove(p)#not myself
 		for place in p.places:
 			possible = possible.union(place.clientele)

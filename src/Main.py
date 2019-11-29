@@ -10,7 +10,7 @@ map_fname = '../test_map_small.png'
 s.read_map_from_image(mr,map_fname)
 
 #setup diseases
-dis = test_diseases
+dis = fast_diseases
 s.set_diseases(dis)
 
 #setup pop builder

@@ -42,7 +42,7 @@ class TestLocation(TestCase):
 		p3.disease_state[self.t_disease] = 'VU'
 		p4.disease_state[self.t_disease] = 'R'
 
-		self.tl_home.infection_round(0)
+		self.tl_home.infection_round()
 
 		assert(p0.disease_state[self.t_disease] == 'II')
 		assert(p1.disease_state[self.t_disease] == 'VII')

@@ -162,10 +162,10 @@ STD_0.symptom_infectivity_modifier = 0.
 STD_0.recovery_rate = 0.01
 STD_0.die_probability = 0.001			#this doesn't actually kill you
 STD_0.state_infectability_modifiers = {'S':0.,
-									   'II':0.2,
-									   'VII':0.2,
-									   'IS':0.3,
-									   'VIS':0.3,
+									   'II':0.1,
+									   'VII':0.1,
+									   'IS':0.15,
+									   'VIS':0.15,
 									   'R':0.,
 									   'VR':0.,
 									   'VS':0.,
@@ -178,11 +178,11 @@ STD_0.vaccination_rate = 0.#there isn't one
 
 #flu-like
 virus_0 = Disease('virus 0')
-virus_0.infectivity = {'idle':0.05,
-						'sleep':0.001,
-						'traveling':0.001,
-						'talking':0.1,
-						'intimate':0.3}
+virus_0.infectivity = {'idle':0.0005,
+						'sleep':0.0001,
+						'traveling':0.0001,
+						'talking':0.01,
+						'intimate':0.03}
 virus_0.hand_wash_coef = 0.5
 virus_0.symptom_show_rate = 0.3
 virus_0.recovery_rate = 0.2
@@ -192,11 +192,11 @@ virus_0.vaccination_rate = 0.2
 
 #measles-like, some numbers from https://en.wikipedia.org/wiki/Measles
 virus_1 = Disease('virus 1')
-virus_1.infectivity = { 'idle':0.05,
-						'sleep':0.1,
-						'traveling':0.05,
-						'talking':0.7,
-						'intimate':0.9}
+virus_1.infectivity = { 'idle':0.005,
+						'sleep':0.01,
+						'traveling':0.005,
+						'talking':0.07,
+						'intimate':0.09}
 virus_1.hand_wash_coef = 0.2
 virus_1.symptom_show_rate = 1./14.
 virus_1.recovery_rate = 0.09
@@ -207,22 +207,22 @@ virus_1.vaccination_rate = 0.95
 #entirely made up, but potentially interesting: competitive disease
 competitive_disease_0 = Disease("Competitive 0")
 competitive_disease_0.infectivity = {'idle':0.,
-									'sleep':0.075,
+									'sleep':0.0075,
 									'traveling':0.,
-									'talking':0.1,
-									'intimate':0.35}
+									'talking':0.01,
+									'intimate':0.035}
 competitive_disease_0.hand_wash_coef = 0.7
 competitive_disease_0.symptom_show_rate = 0.1
 competitive_disease_0.symptom_infectivity_modifier = 0.3
 competitive_disease_0.recovery_rate = 0.2
 competitive_disease_0.die_probability = 0.001
 competitive_disease_0.state_infectability_modifiers = {'S':0.,
-													  'II':-0.4,
-													  'VII':-0.4,
-													  'IS':-0.6,
-													  'VIS':-0.6,
-													  'R':-0.1,
-													  'VR':-0.1,
+													  'II':-0.2,
+													  'VII':-0.2,
+													  'IS':-0.3,
+													  'VIS':-0.3,
+													  'R':-0.05,
+													  'VR':-0.05,
 													  'VS':0.,
 													  'VU':0.,
 													  'D':0.,

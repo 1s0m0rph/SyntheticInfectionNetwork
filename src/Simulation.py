@@ -86,7 +86,7 @@ class Simulation:
 			self.simulate_day()
 			if verbose:
 				print('day ' + str(dayct) + ' summary: ')
-				print(str(len(self.infection_networks)) + ' total people infected (' + str(len(self.infection_networks) - self.total_infections_prev_day) + ' today)')
+				print(str(len(self.infection_networks)) + ' total infections (' + str(len(self.infection_networks) - self.total_infections_prev_day) + ' today)')
 				n_infected = {disease : 0 for disease in self.diseases}	#map diseases to number infected
 				total_infected = 0
 				infectable_time = 0
@@ -103,7 +103,7 @@ class Simulation:
 				print('current infected for each disease:')
 				for disease in self.diseases:
 					print(str(disease) + ': ' + str(n_infected[disease]))
-				print('current infected: ' + str(total_infected))	#will be off by however many diseases are actually going
+				print('current infections: ' + str(total_infected))	#will be off by however many diseases are actually going
 				print('total time infectable (interaction based): ' + str(infectable_time))
 				print('total people infectable (interaction based): ' + str(infectable_people))
 				print()
