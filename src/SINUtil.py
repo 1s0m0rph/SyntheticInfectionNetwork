@@ -8,7 +8,7 @@ PROBABILITY_TRAVEL_SOMEWHERE = 0.2#per time step, what is the baseline probabili
 AVERAGE_HOME_IDLE_TIME = 60#time steps. the average amount of time someone will spend idle at home before going somewhere
 SSORT_LEVELS = 0#how many levels of quicksort partition should I apply to get the affinity order
 
-DISEASE_STATES = {'S','II','IS','R','V'}#Susceptible; Infected, Infectious; Infected, showing Symptoms; Recovered; Vaccinated
+DISEASE_STATES = {'S','II','IS','R','VS','VU','D'}#Susceptible; Infected, Infectious; Infected, showing Symptoms; Recovered; Vaccinated, Susceptible; Vaccinated, unsusceptible; Dead
 
 HANDWASH_EFFECT_MODIFIERS = [[0.,-0.1],
 							 [-0.1,-0.5]]#modifiers for infectivity, given that (a,b) washed their hands
@@ -20,9 +20,6 @@ WORKABLE_LOCATION_TYPES = {'office','shop','convention','hospital'}
 
 BIDIRECTIONAL_COWORKERS = False
 BIDIRECTIONAL_FRIENDS = False
-
-#TODO: move to the actual simulation part
-diseases_active = {0:None}#mapping of disease id to the actual disease object
 
 """
 Given a "time string" (HH:MM:SS, HH:MM, or just HH), convert that string into the equivalent number of time steps after midnight

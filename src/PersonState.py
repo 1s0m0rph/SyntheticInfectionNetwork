@@ -71,9 +71,11 @@ class Person:
 		self.partners = set() #people this person might interact with sexually
 		self.friends = set()
 		self.coworkers = set()  # or schoolmates
+		self.is_dead = False
+		self.healthiness = 0.
 
 		# infection info
-		self.disease_state = {}	#mapping of disease ids onto disease states
+		self.disease_state = {}	#mapping of diseases onto what state I'm in for them (all need to be present in this list
 		self.diseasesShowingSymptoms = False
 
 		#behavior info
@@ -112,11 +114,29 @@ class Person:
 			loc.employees_residents.add(self)
 			loc.clientele.add(self)
 
+	def die(self):
+		self.is_dead = True
+		self.set_home(None)
+		self.set_workplace(None)
+		for loc in self.places:
+			loc.clientele.remove(self)
+		# self.currentLocation = None	#leave this for now, since we want to know where people are when they die
+
 	"""
 	set our location to this and notify that location that we have arrived (also notify our current one that we are leaving), do not change location if the new location is full
 	"""
 	def set_current_location(self,loc):
 		loc.arrive(self)
+
+	"""
+	do the general cleanup things at the beginning of the day (check for recovery/death/etc)
+	"""
+	def day_begin(self):
+		if self.is_dead:
+			return
+
+		for disease in self.disease_state:
+			disease.disease_state_transition(self)
 
 	"""
 	Assign an affinity score between me and this person
@@ -160,6 +180,8 @@ class Person:
 	if we're going somewhere, we need to actually move
 	"""
 	def do_current_action(self):
+		if self.is_dead:
+			return	#dead people don't do anything
 		if self.currentActivity.activity_type == 'traveling':#then we need to update our coords in the right direction
 			if self.travel_counter >= self.currentLocation.travel_time:
 				self.currentLocation = self.currentActivity.path.pop()#get the next location we travel through to get where we're going
@@ -177,6 +199,8 @@ class Person:
 	figure out, based on affinity, who (if anyone) I should talk to
 	"""
 	def talk_to(self):
+		if self.is_dead:
+			return None
 		people_here = [x for x in self.currentLocation.people if x != self]  # who is actually here right now that I might go talk to? (not including myself, then)
 		affinities = [self.affinity(x) for x in people_here]
 
@@ -203,10 +227,14 @@ class Person:
 	do the activity given by the transition
 	"""
 	def action_transition(self,time):
+		if self.is_dead:
+			return
 		self.currentActivity = self.get_action_transition(time)
 
 
 	def go_to(self,place):
+		if self.is_dead:
+			return None
 		assert(place is not None)
 
 		if self.currentLocation == place:
@@ -230,6 +258,8 @@ class Person:
 	done according to the mdp rules -- i.e. to the place in our list with the higest average affinity for its current clientele
 	"""
 	def pick_rtravel_loc(self):
+		if self.is_dead:
+			return None
 		#with probability dependent on if we're currently showing symptoms and our disease modifier, go home instead
 		hyg_prob = self.hygiene_coef if self.diseasesShowingSymptoms else 0
 		if np.random.choice([True,False],[hyg_prob,1-hyg_prob]):
@@ -248,6 +278,8 @@ class Person:
 		return best_loc
 
 	def continue_interaction(self):
+		if self.is_dead:
+			return None
 		# stop with probability (1 - affinity with this person)
 		aff = self.affinity(self.currentActivity.to)
 		if rnd.random() < aff:  # continue with probability aff
@@ -261,6 +293,8 @@ class Person:
 	Knowing what time it is, what are the states I could transition to, and with what probability? Pick one from those with those probabilites and return it
 	"""
 	def get_action_transition(self,time):
+		if self.is_dead:
+			return None
 		#temporal info
 		if self.work_schedule is not None:
 			during_work_time = time_within_tuple(time,self.work_schedule)
@@ -514,6 +548,8 @@ class PopulationBuilder:
 		self.work_duration_stdev_dist = lambda: tconv("01")																	#always 1 hour
 		self.sleep_begin_dist = lambda work_time_tuple: int(np.random.normal(work_time_tuple[1] + tconv("03"),tconv("00:30")))	#3 hours after work ends on average
 		self.sleep_duration_dist = lambda: int(np.random.normal(tconv("07"),tconv("01")))
+		self.disease_list = []																								#list of disease objects, the builder will attempt to initialize the population with them
+		self.healthiness_dist = lambda age: np.random.uniform(0,1)															#function from age of person -> person's healthiness coefficient
 
 
 		#logical variables
@@ -579,57 +615,78 @@ class PopulationBuilder:
 	def set_sleep_duration_distribution(self,dist):
 		self.sleep_duration_dist = dist
 
+	def set_diseases_present(self,dis:list):
+		self.disease_list = dis
+
+	def set_healithiness_coefficient_distribution(self,dist):
+		self.healthiness_dist = dist
+
 	"""
 	Assign all of the primitive details randomly to this person (they already need to have a home)
 		age
 		workplace
 		places
 	"""
-	def assign_primitive_details(self,p:Person):
-		p.age = self.age_dist()
-		if (p.age >= self.school_range[0]) and (p.age <= self.school_range[1]):
+	def assign_primitive_details(self, person:Person):
+		person.age = self.age_dist()
+		if (person.age >= self.school_range[0]) and (person.age <= self.school_range[1]):
 			if self.current_school_people >= self.max_school_size:
 				#then we already have enough school people, add the oldest school age to this to make sure this person isn't in school
-				p.age += self.school_range[1]
+				person.age += self.school_range[1]
 			else:
 				#age is valid now
 				#then this person is in school
-				p.set_workplace(self.M.get_school())
+				person.set_workplace(self.M.get_school())
 
-		if (not ((p.age >= self.school_range[0]) and (p.age <= self.school_range[1]))) and (p.home is not None):
+		if (not ((person.age >= self.school_range[0]) and (person.age <= self.school_range[1]))) and (person.home is not None):
 			if not coinflip(self.jobless_prob):
 				#this person is not in school and is not homeless and is not jobless, find a workplace
 				wp,self.workable_locations = self.M.get_random_workable_location(workable=self.workable_locations)
-				p.set_workplace(wp)
+				person.set_workplace(wp)
 
 		#now the person has a workplace (if relevant) and an age, assign their locations
 		nlocs = self.num_places_dist()
 		for _ in range(nlocs):
-			self.M.add_random_placable_location(p,self.location_ages_avg_dist,self.location_ages_stdev_dist)
+			self.M.add_random_placable_location(person, self.location_ages_avg_dist, self.location_ages_stdev_dist)
 
 
 		#hygiene
-		p.hygiene_coef = self.hygiene_dist(p.age)
+		person.hygiene_coef = self.hygiene_dist(person.age)
 
 		#work schedule
-		if p.workplace is not None:
-			if p.workplace.avg_work_begin_time == -1:
+		if person.workplace is not None:
+			if person.workplace.avg_work_begin_time == -1:
 				#assign this as needed
-				p.workplace.avg_work_begin_time = self.work_begin_avg_dist()
-				p.workplace.work_begin_stdev = self.work_begin_stdev_dist()
-				p.workplace.avg_work_duration = self.work_duration_avg_dist()
-				p.workplace.work_duration_stdev = self.work_duration_stdev_dist()
-			work_begin_time = negsafe_mod(int(np.random.normal(p.workplace.avg_work_begin_time,p.workplace.work_begin_stdev)),TIME_STEPS_PER_DAY)
-			work_duration = max(int(np.random.normal(p.workplace.avg_work_duration,p.workplace.work_duration_stdev)),0)
+				person.workplace.avg_work_begin_time = self.work_begin_avg_dist()
+				person.workplace.work_begin_stdev = self.work_begin_stdev_dist()
+				person.workplace.avg_work_duration = self.work_duration_avg_dist()
+				person.workplace.work_duration_stdev = self.work_duration_stdev_dist()
+			work_begin_time = negsafe_mod(int(np.random.normal(person.workplace.avg_work_begin_time, person.workplace.work_begin_stdev)), TIME_STEPS_PER_DAY)
+			work_duration = max(int(np.random.normal(person.workplace.avg_work_duration, person.workplace.work_duration_stdev)), 0)
 			work_end_time = negsafe_mod((work_begin_time + work_duration), TIME_STEPS_PER_DAY)
-			p.work_schedule = (work_begin_time,work_end_time)
+			person.work_schedule = (work_begin_time, work_end_time)
 		else:
-			p.work_schedule = (0,0)
+			person.work_schedule = (0, 0)
 
-		sleep_begin_time = self.sleep_begin_dist(p.work_schedule)
+		sleep_begin_time = self.sleep_begin_dist(person.work_schedule)
 		sleep_duration = self.sleep_duration_dist()
 		sleep_end_time = negsafe_mod((sleep_begin_time + sleep_duration) ,TIME_STEPS_PER_DAY)
-		p.sleep_schedule = (sleep_begin_time,sleep_end_time)
+		person.sleep_schedule = (sleep_begin_time, sleep_end_time)
+
+		#set the disease state modifiers
+		for disease in self.disease_list:
+			is_vaccinated = disease.decide_is_vaccinated(person)
+			if is_vaccinated:
+				vaccine_works = coinflip(disease.vaccination_effectiveness)
+				if vaccine_works:
+					person.disease_state.update({disease: 'VU'})	#vaccinated, unsusceptible
+				else:
+					person.disease_state.update({disease:'VS'})		#vacinated, susceptible
+			else:
+				person.disease_state.update({disease:'S'})
+
+		person.healthiness = self.healthiness_dist(person.age)
+
 
 	'''
 	The process for this is generally to make a random graph as defined in the PNAS paper (2566) on the people who work at this location, with the degree distribution
@@ -656,7 +713,7 @@ class PopulationBuilder:
 		return p
 
 	'''
-	Among all of the people who live at this place, assign k of them to be partners of p, where k is from the partners distribution
+	Among all of the people who live at this place, assign k of them to be partners of person, where k is from the partners distribution
 	'''
 	def assign_partners(self,p:Person):
 		if p.home is None:
@@ -722,7 +779,7 @@ class PopulationBuilder:
 
 			p = Person(h,self.M)
 
-			#person p now has a home and has been instantiated, assign their primitive details
+			#person person now has a home and has been instantiated, assign their primitive details
 			self.assign_primitive_details(p)
 
 			#add them to the person list
@@ -839,12 +896,12 @@ class Location:
 		for a in self.people:
 			for b in self.people:
 				if a != b:
-					for d_id in a.disease_state:
-						if diseases_active[d_id].infects(a,b):
-							rset.add((a,d_id,b))
-					for d_id in b.disease_state:
-						if diseases_active[d_id].infects(b,a):
-							rset.add((b,d_id,a))
+					for disease in a.disease_state:
+						if disease.infects(a,b):
+							rset.add((a,disease,b))
+					for disease in b.disease_state:
+						if disease.infects(b,a):
+							rset.add((b,disease,a))
 		return rset
 
 	def __repr__(self):
