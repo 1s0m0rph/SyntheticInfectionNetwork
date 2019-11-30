@@ -83,16 +83,16 @@ class TestPerson(TestCase):
 
 		# what is the affinity between p0 and p7?
 		zs_aff = p0.affinity(p7)
-		np.testing.assert_almost_equal(zs_aff,0.1)
+		np.testing.assert_almost_equal(zs_aff,0.15)
 
 		#between 0 and 2?
 		zt_aff = p0.affinity(p2)
-		np.testing.assert_almost_equal(zt_aff,0.72)
+		np.testing.assert_almost_equal(zt_aff,0.77)
 
 		#more complex requires some movement
 		p0.set_current_location(test_home)
 		zf_aff = p0.affinity(p5)
-		np.testing.assert_almost_equal(zf_aff, 0.04444444444444446)
+		np.testing.assert_almost_equal(zf_aff, 0.1)
 		p0.set_current_location(test_wp)
 
 

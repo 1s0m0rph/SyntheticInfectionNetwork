@@ -75,8 +75,10 @@ class Person:
 		self.healthiness = 0.
 
 		# infection info
-		self.disease_state = {}	#mapping of diseases onto what state I'm in for them (all need to be present in this list
+		self.disease_state = {}	#mapping of diseases onto what state I'm in for them (all need to be present in this list)
+		self.infected_by = {}	#mapping of diseases onto the people that infected me for them
 		self.diseasesShowingSymptoms = False
+		self.idle_infection_count = 0
 
 		#behavior info
 		self.hygiene_coef = 0#given that I'm interacting with someone, what's the probability I've washed my hands first?
@@ -195,19 +197,29 @@ class Person:
 	"""
 	def do_current_action(self):
 		if self.is_dead:
-			return	#dead people don't do anything
+			return 0	#dead people don't do anything
 		if self.currentActivity.activity_type == 'traveling':#then we need to update our coords in the right direction
 			if self.travel_counter >= self.currentLocation.travel_time:
 				self.set_current_location(self.currentActivity.path.pop())#get the next location we travel through to get where we're going
 				#^^^ really important we *set* the location here so that it registers us as being there
 				if self.currentLocation == self.currentActivity.to:#then we've arrived, go idle
 					self.currentActivity = Activity('idle')
-					return
+					return 0
 			else:
 				self.travel_counter += 1
 
 		elif (self.currentActivity.activity_type == 'talking') or (self.currentActivity.activity_type == 'intimate'):
-			pass#TODO: infection logic here?
+			#since we're interacting with someone, we should check for infections here
+			infections = 0
+			for disease in self.disease_state:
+				if disease.infects(self, self.currentActivity.to):
+					self.currentActivity.to.infected_by.update({disease:self})#let this person know who infected them with this disease
+					disease.infect(self.currentActivity.to)
+					infections += 1
+				#this will be called on everyone, so there's no need to check if the other person infects me now
+			return infections
+
+		return 0
 
 
 	"""
@@ -216,7 +228,22 @@ class Person:
 	def talk_to(self):
 		if self.is_dead:
 			return None
-		people_here = [x for x in self.currentLocation.people if x != self]  # who is actually here right now that I might go talk to? (not including myself, then)
+		#using this opportunity to check for idle infections
+		people_here = []
+		for x in self.currentLocation.people:
+			if x != self:
+				people_here.append(x)
+				#now check for idle infections
+				self.idle_infection_count = 0
+				for disease in self.disease_state:
+					if disease.infects(self,x):
+						x.infected_by.update({disease:self})
+						disease.infect(x)
+						self.idle_infection_count += 1
+					if disease.infects(x,self):
+						self.infected_by.update({disease: x})
+						disease.infect(self)
+						self.idle_infection_count += 1
 		affinities = [self.affinity(x) for x in people_here]
 
 		ph_sort = list(zip(people_here.copy(),affinities.copy()))
@@ -331,6 +358,18 @@ class Person:
 			#go home
 			return self.go_to(self.home)
 
+		#part 0: sickness -> go to hospital?
+		#this should take precedence over going to work, but not over going to bed
+
+		if self.diseasesShowingSymptoms:
+			go_to_hospital = coinflip(weighted_prob_combination(self.hygiene_coef, 0.5, 1 - self.get_effective_healthiness(), 0.5))
+			#we go to the hospital with a probability averaged on my hygiene coefficient (more hygeneous == more likely to go to the hospital) and my effective healthiness (worse disease make me feel worse and so I'm more likely to go to the hospital)
+			if go_to_hospital:
+				#then go to the closest hospital
+				hosp = self.M.get_nearest_hospital(self)
+				return self.go_to(hosp)
+		#otherwise, it's fine, we'll keep on keepin on
+
 
 		#going to work logic
 		if during_work_time and (self.workplace is not None):
@@ -341,17 +380,6 @@ class Person:
 
 		#so we're where we're supposed to be and doing what we ought to be doing
 		#should we change what we're doing?
-
-		#part 0: sickness -> go to hospital?
-
-		if self.diseasesShowingSymptoms:
-			go_to_hospital = coinflip(weighted_prob_combination(self.hygiene_coef, 0.5, 1-self.get_effective_healthiness(), 0.5))
-			#we go to the hospital with a probability averaged on my hygiene coefficient (more hygeneous == more likely to go to the hospital) and my effective healthiness (worse disease make me feel worse and so I'm more likely to go to the hospital)
-			if go_to_hospital:
-				#then go to the closest hospital
-				hosp = self.M.get_nearest_hospital(self)
-				return self.go_to(hosp)
-			#otherwise, it's fine, we'll keep on keepin on
 
 
 		#part 1: at work
@@ -814,7 +842,6 @@ class PopulationBuilder:
 
 		for i,p in enumerate(plist):
 			#now that all the primitive details are in, we can assign the network details
-			#FIXME: one of these functions removes people from employees_residents, particularly regarding homes (this makes killing people break everything!)
 			plist[i] = self.assign_coworkers(p)
 			plist[i] = self.assign_friends(p)
 			plist[i] = self.assign_partners(p)

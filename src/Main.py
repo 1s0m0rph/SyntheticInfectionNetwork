@@ -1,16 +1,20 @@
 from Simulation import *
 np.random.seed(0)
 
-s = Simulation()
+dump_file_infections = 'small_test_infection_data.csv'
+dump_files = [dump_file_infections]
+
+dump_type = ['infection']
+
+s = Simulation(infodump_file=dump_files,ensure_non_immune_patient_zero=True,infodump_type=dump_type)
 
 #setup map reader
-v = False
 mr = MapReader(PUBLIC_BLOCK_SIZE=(2, 2), CAPACITY_PER_PIXEL=2, TIME_STEP_PER_PIXEL=2)
-map_fname = '../test_map_small.png'
+map_fname = 'test_map_small.png'
 s.read_map_from_image(mr,map_fname)
 
 #setup diseases
-dis = fast_diseases
+dis = [virus_0]
 s.set_diseases(dis)
 
 #setup pop builder

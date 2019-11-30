@@ -44,6 +44,8 @@ INTERACTION_EXPLORATION_REWARD = 0.05
 
 GENERAL_TALK_PROBABILITY = 0.5
 
+HOSPITAL_TREATMENT_EFFECT = 0.5	#to what extent (modulo the treatability of the disease) does being in the hospital help?
+
 """
 Given a "time string" (HH:MM:SS, HH:MM, or just HH), convert that string into the equivalent number of time steps after midnight
 """
