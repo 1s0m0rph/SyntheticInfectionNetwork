@@ -295,7 +295,7 @@ class Map:
 	because the map isn't perfectly represented by such a heuristic, it's technically not admissable, so we're not guaranteed optimality. That doesn't really matter since we only really care that people get from point a to point b and not so much how fast it takes them but how much we spend doing the calculation (euclidean is at least closer to being admissable, but since it generally visits like 2x as many places, we're using manhattan)
 	
 	'''
-	def get_path(self,a,b,h=manhattan_distance,verbose=False):
+	def get_path(self,a,b,h=MAP_OPTIMIZATION_FUNCTION,verbose=False):
 		if a == b:
 			return []#we're already there
 		path = []
@@ -463,3 +463,19 @@ class Map:
 			h = houses[hidx]
 
 		return h,houses
+
+	'''
+	Find and return the nearest hospital to this person, given by h(x)
+	'''
+	def get_nearest_hospital(self,person,h = MAP_OPTIMIZATION_FUNCTION):
+		person_loc = (person.currentLocation.mapx_center,person.currentLocation.mapy_center)
+		min_dist = float('inf')
+		min_loc = None
+		for loc in self.loc_list:
+			if loc.loc_type == 'hospital':
+				hosp_loc = (loc.mapx_center,loc.mapy_center)
+				hosp_dist = h(person_loc,hosp_loc)
+				if hosp_dist < min_dist:
+					min_dist = hosp_dist
+					min_loc = loc
+		return min_loc

@@ -51,6 +51,8 @@ class Disease:
 
 		self.vaccination_rate = 0.				#what is the probability any given person is vaccinated against this disease?
 
+		self.symptom_health_effect = 0.			#to what extent does this disease hurt the healthiness of the individual? (for the cold, it's not too bad, for zika, this would be debilitating (high))
+
 		for infection_state in DISEASE_STATES:
 			assert(infection_state in self.state_infectability_modifiers)
 
@@ -67,7 +69,7 @@ class Disease:
 		return coinflip(self.symptom_show_rate)
 
 	def die(self,person:ps.Person):
-		if coinflip(1 - person.healthiness):#healthier means this is less likely to happen
+		if coinflip(1 - person.get_effective_healthiness()):#healthier means this is less likely to happen
 			return coinflip(self.die_probability)
 
 	def decide_is_vaccinated(self,person:ps.Person):
@@ -175,6 +177,7 @@ STD_0.state_infectability_modifiers = {'S':0.,
 									  }
 STD_0.vaccination_effectiveness = 0.
 STD_0.vaccination_rate = 0.#there isn't one
+STD_0.symptom_health_effect = 0.05#small effect
 
 #flu-like
 virus_0 = Disease('virus 0')
@@ -189,6 +192,7 @@ virus_0.recovery_rate = 0.2
 virus_0.die_probability = 0.009
 virus_0.vaccination_effectiveness = 0.3
 virus_0.vaccination_rate = 0.2
+virus_0.symptom_health_effect = 0.2#medium effect
 
 #measles-like, some numbers from https://en.wikipedia.org/wiki/Measles
 virus_1 = Disease('virus 1')
@@ -203,6 +207,7 @@ virus_1.recovery_rate = 0.09
 virus_1.die_probability = 0.1
 virus_1.vaccination_effectiveness = 0.99
 virus_1.vaccination_rate = 0.95
+virus_1.symptom_health_effect = 0.6#large effect
 
 #entirely made up, but potentially interesting: competitive disease
 competitive_disease_0 = Disease("Competitive 0")
@@ -230,6 +235,7 @@ competitive_disease_0.state_infectability_modifiers = {'S':0.,
 													  }
 competitive_disease_0.vaccination_effectiveness = 0.6
 competitive_disease_0.vaccination_rate = 0.4
+competitive_disease_0.symptom_health_effect = 0.35
 
 #this is a test disease to make sure the logic all works as expected
 t_disease = Disease('test disease')
@@ -244,6 +250,7 @@ t_disease.recovery_rate = 0.5
 t_disease.die_probability = 0.1
 t_disease.vaccination_effectiveness = 0.
 t_disease.vaccination_rate = 0.5
+t_disease.symptom_health_effect = 1#F
 
 all_diseases = [STD_0,virus_0,virus_1,competitive_disease_0]	#all diseases yet defined
 real_basis_diseases = [STD_0,virus_0,virus_1]					#just the ones that have basis in real ones

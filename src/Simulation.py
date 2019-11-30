@@ -89,22 +89,15 @@ class Simulation:
 				print(str(len(self.infection_networks)) + ' total infections (' + str(len(self.infection_networks) - self.total_infections_prev_day) + ' today)')
 				n_infected = {disease : 0 for disease in self.diseases}	#map diseases to number infected
 				total_infected = 0
-				infectable_time = 0
-				infectable_people = 0
 				for person in self.population:
 					for disease in self.diseases:
 						if person.disease_state[disease] in DISEASE_STATES_INFECTIOUS:
 							n_infected[disease] += 1
 							total_infected += 1
 
-					if person.interaction_time_infectable != 0:
-						infectable_time += person.interaction_time_infectable
-						infectable_people += 1
 				print('current infected for each disease:')
 				for disease in self.diseases:
 					print(str(disease) + ': ' + str(n_infected[disease]))
 				print('current infections: ' + str(total_infected))	#will be off by however many diseases are actually going
-				print('total time infectable (interaction based): ' + str(infectable_time))
-				print('total people infectable (interaction based): ' + str(infectable_people))
 				print()
 			dayct += 1

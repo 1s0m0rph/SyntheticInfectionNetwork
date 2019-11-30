@@ -80,8 +80,6 @@ class Person:
 
 		#behavior info
 		self.hygiene_coef = 0#given that I'm interacting with someone, what's the probability I've washed my hands first?
-		self.diseasesVaccinatable = set()#set of diseases for which I can (or am willing to) be vaccinated for
-		self.interaction_time_infectable = 0#how long have I interacted with someone who could infect me?
 
 		#map info
 		self.M = M
@@ -91,6 +89,14 @@ class Person:
 
 	def __repr__(self):
 		return "Person " + str(self.id)
+
+	def get_effective_healthiness(self) -> float:
+		disease_mod = 0.
+		if self.diseasesShowingSymptoms:
+			#then take the worst one and subtract its health modifier from our healthiness
+			disease_mod = max(map(lambda x: x.symptom_health_effect,self.disease_state.keys()))
+
+		return max(0.,self.healthiness - disease_mod)
 
 	def any_infection_present(self):
 		for disease in self.disease_state:
@@ -154,7 +160,7 @@ class Person:
 			return 0#no affinity if we can't interact
 		is_partner = person in self.partners
 		if is_partner:
-			return max(0., 0.9 - (self.hygiene_coef if self.diseasesShowingSymptoms else 0.))#we like to interact with our partners
+			return max(0., 0.8 - (self.hygiene_coef if self.diseasesShowingSymptoms else 0.))#we like to interact with our partners
 
 		rolling_prob = 0.
 		cw_dist = calc_bfs_dist(self,'work', person)#distance on the coworker network
@@ -170,7 +176,7 @@ class Person:
 				fr_aff = aff_decay(0.75,0.2)(fr_dist)
 				rolling_prob = weighted_prob_combination(rolling_prob,0.6,fr_aff,0.4)
 		else:
-			fr_aff = aff_decay(0.9,0.2)(fr_dist)
+			fr_aff = aff_decay(0.8,0.2)(fr_dist)
 			rolling_prob += fr_aff
 			if not is_friend_first:
 				#we don't actually want to interact with them -- this is a negative
@@ -179,9 +185,7 @@ class Person:
 				rolling_prob = to_add
 
 		semifinal = max(0, rolling_prob - (self.hygiene_coef if self.diseasesShowingSymptoms else 0))
-		if semifinal == 0:
-			semifinal = INTERACTION_EXPLORATION_REWARD#exploration reward
-		return semifinal
+		return min(semifinal + INTERACTION_EXPLORATION_REWARD,1)
 
 	"""
 	"perform" the current action, if that requires anything
@@ -203,9 +207,6 @@ class Person:
 				self.travel_counter += 1
 
 		elif (self.currentActivity.activity_type == 'talking') or (self.currentActivity.activity_type == 'intimate'):
-			for disease in self.disease_state:
-				if (self.currentActivity.to.disease_state[disease] in DISEASE_STATES_INFECTIOUS) and (self.disease_state[disease] in DISEASE_STATES_SUSCEPTIBLE):
-					self.interaction_time_infectable += 1
 			pass#TODO: infection logic here?
 
 
@@ -307,7 +308,7 @@ class Person:
 	"""
 	Knowing what time it is, what are the states I could transition to, and with what probability? Pick one from those with those probabilites and return it
 	"""
-	def get_action_transition(self,time):
+	def get_action_transition(self,time):#TODO: make hospitals actually relevant by making people go there when they're showing symptoms with some probability
 		if self.is_dead:
 			return None
 		#temporal info
@@ -341,6 +342,17 @@ class Person:
 		#so we're where we're supposed to be and doing what we ought to be doing
 		#should we change what we're doing?
 
+		#part 0: sickness -> go to hospital?
+
+		if self.diseasesShowingSymptoms:
+			go_to_hospital = coinflip(weighted_prob_combination(self.hygiene_coef, 0.5, 1-self.get_effective_healthiness(), 0.5))
+			#we go to the hospital with a probability averaged on my hygiene coefficient (more hygeneous == more likely to go to the hospital) and my effective healthiness (worse disease make me feel worse and so I'm more likely to go to the hospital)
+			if go_to_hospital:
+				#then go to the closest hospital
+				hosp = self.M.get_nearest_hospital(self)
+				return self.go_to(hosp)
+			#otherwise, it's fine, we'll keep on keepin on
+
 
 		#part 1: at work
 		if self.currentLocation == self.workplace:
@@ -354,7 +366,7 @@ class Person:
 				return self.continue_interaction()
 
 			#otherwise, should we talk to someone?
-			talk = rnd.random() < 0.5
+			talk = coinflip(GENERAL_TALK_PROBABILITY)
 			if talk:
 				return self.talk_to()
 			else:
@@ -414,7 +426,7 @@ class Person:
 						return self.continue_interaction()#doesn't always happen
 
 					# otherwise, should we talk to someone?
-					talk = rnd.random() < 0.5
+					talk = coinflip(GENERAL_TALK_PROBABILITY)
 					if talk:
 						return self.talk_to()
 					else:

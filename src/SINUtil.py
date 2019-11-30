@@ -42,6 +42,8 @@ BIDIRECTIONAL_FRIENDS = False
 
 INTERACTION_EXPLORATION_REWARD = 0.05
 
+GENERAL_TALK_PROBABILITY = 0.5
+
 """
 Given a "time string" (HH:MM:SS, HH:MM, or just HH), convert that string into the equivalent number of time steps after midnight
 """
@@ -177,3 +179,5 @@ def negsafe_mod(a:int,n:int):
 	if a < 0:
 		return negsafe_mod(a+n,n)	#n cong 0 mod n, so this doesn't change our equivalence class
 	return a % n
+
+MAP_OPTIMIZATION_FUNCTION = manhattan_distance
