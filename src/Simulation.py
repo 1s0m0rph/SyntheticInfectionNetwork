@@ -149,6 +149,24 @@ class Simulation:
 		return True
 
 	'''
+	Much like the strict convergence, but will return false only if *all* of the diseases we're running have someone in a nonfinal state
+	that is, we stop when any of the diseases die
+	'''
+	def converged_strict_single_dead(self):
+		diseases_dead = set(self.diseases)
+		for person in self.population:
+			for disease in diseases_dead:
+				if person.disease_state[disease] not in DISEASE_STATES_FINAL:
+					#this disease is still alive
+					diseases_dead.remove(disease)
+
+			if len(diseases_dead) == 0:
+				# then all of them are still alive, so we can keep going
+				return False
+
+		return True#one of them must never have found a person in the final disease state, so at least one is dead
+
+	'''
 	much 'looser' type of convergence that only requires no new infections in a while
 	
 	checks the last few to see if anyone was infected, if not then we're done
@@ -166,7 +184,7 @@ class Simulation:
 		else:
 			return False
 
-	def full_simulation(self,converged=converged_strict,verbose = False):
+	def full_simulation(self,converged=converged_strict_single_dead,verbose = False):
 		#pick a patient zero for each disease
 		diseases_running = 0	#how many diseases actually have anyone infected?
 		for d in self.diseases:

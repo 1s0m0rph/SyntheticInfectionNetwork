@@ -164,10 +164,10 @@ class Disease:
 #something of an HIV-like STD
 STD_0 = Disease('STD_0')
 STD_0.infectivity = {'idle':0.,
-					'sleep':0.001,
+					'sleep':0.,
 					'traveling':0.,
-					'talking':0.001,
-					'intimate':0.3}
+					'talking':0.00000001,
+					'intimate':0.03}
 STD_0.hand_wash_coef = 0.
 STD_0.symptom_show_rate = 0.05
 STD_0.symptom_infectivity_modifier = 0.
@@ -195,8 +195,8 @@ virus_0 = Disease('virus 0')
 virus_0.infectivity = {'idle':0.0005,
 						'sleep':0.0001,
 						'traveling':0.0001,
-						'talking':0.01,
-						'intimate':0.03}
+						'talking':0.0075,
+						'intimate':0.04}
 virus_0.hand_wash_coef = 0.5
 virus_0.symptom_show_rate = 0.3
 virus_0.recovery_rate = 0.2

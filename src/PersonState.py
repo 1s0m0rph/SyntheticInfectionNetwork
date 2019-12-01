@@ -229,21 +229,24 @@ class Person:
 		if self.is_dead:
 			return None
 		#using this opportunity to check for idle infections
-		people_here = []
-		for x in self.currentLocation.people:
-			if x != self:
-				people_here.append(x)
-				#now check for idle infections
-				self.idle_infection_count = 0
-				for disease in self.disease_state:
-					if disease.infects(self,x):
-						x.infected_by.update({disease:self})
-						disease.infect(x)
-						self.idle_infection_count += 1
-					if disease.infects(x,self):
-						self.infected_by.update({disease: x})
-						disease.infect(self)
-						self.idle_infection_count += 1
+		if DISABLE_IDLE_INFECTION:
+			people_here = [x for x in self.currentLocation.people if x != self]
+		else:
+			people_here = []
+			for x in self.currentLocation.people:
+				if x != self:
+					people_here.append(x)
+					#now check for idle infections
+					self.idle_infection_count = 0
+					for disease in self.disease_state:
+						if disease.infects(self,x):
+							x.infected_by.update({disease:self})
+							disease.infect(x)
+							self.idle_infection_count += 1
+						if disease.infects(x,self):
+							self.infected_by.update({disease: x})
+							disease.infect(self)
+							self.idle_infection_count += 1
 		affinities = [self.affinity(x) for x in people_here]
 
 		ph_sort = list(zip(people_here.copy(),affinities.copy()))

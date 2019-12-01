@@ -46,6 +46,8 @@ GENERAL_TALK_PROBABILITY = 0.5
 
 HOSPITAL_TREATMENT_EFFECT = 0.5	#to what extent (modulo the treatability of the disease) does being in the hospital help?
 
+DISABLE_IDLE_INFECTION = True	#makes it so that idle infections (where people aren't explicitly interacting) aren't modeled
+
 """
 Given a "time string" (HH:MM:SS, HH:MM, or just HH), convert that string into the equivalent number of time steps after midnight
 """
