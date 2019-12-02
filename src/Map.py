@@ -153,6 +153,8 @@ class MapReader:
 		l = Location(LTI_INV[ltype_i],capacity=cap)
 		l.mapx_center = avgx
 		l.mapy_center = avgy
+		l.mapx = startx#these are examples of pixels known to be within the location
+		l.mapy = starty#having these ensures we can always reconstruct where they were on the map image to begin with
 		l.travel_time = ttime * self.TIME_STEP_PER_PIXEL
 		self.loc_list.append(l)
 

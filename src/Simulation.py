@@ -12,8 +12,10 @@ from Disease import *
 
 class Simulation:
 
+	DUMP_FILE_DELIMITER = '|'
+
 	'''
-	infodump type should be a list of strings in {infection,network}, with the file to dump them to in the same order in infodump_file
+	infodump type should be a list of strings in {infection,network,map}, with the file to dump them to in the same order in infodump_file
 	file should be a list -- one for each
 	'''
 	def __init__(self,infodump_file=None,time_steps_per_infodump=100,ensure_non_immune_patient_zero=False,infodump_type=None):
@@ -54,11 +56,11 @@ class Simulation:
 		self.current_time += 1
 
 	def infection_info_format(self):
-		retstr = 'TIME STEP,'
+		retstr = 'TIME STEP' + self.DUMP_FILE_DELIMITER
 		for disease in self.diseases:
 			for stype in DISEASE_STATES:
 				retstr += disease.name + ' '
-				retstr += stype + ','
+				retstr += stype + self.DUMP_FILE_DELIMITER
 
 		retstr += 'TOTAL'
 		return retstr
@@ -68,15 +70,14 @@ class Simulation:
 	time step | (for each disease: disease name | (for each state: count of people in that state))
 	'''
 	def dump_infection_info(self) -> str:
-		retstr = str(self.current_time) + ','
+		retstr = str(self.current_time) + self.DUMP_FILE_DELIMITER
 		for disease in self.diseases:
 			disease_state_counts = {state: 0 for state in DISEASE_STATES}
-			# retstr += disease.name + ','
 			for person in self.population:
 				disease_state_counts[person.disease_state[disease]] += 1
 
 			for state in disease_state_counts:
-				retstr += str(disease_state_counts[state]) + ','
+				retstr += str(disease_state_counts[state]) + self.DUMP_FILE_DELIMITER
 
 		retstr += str(len(self.population))
 		return retstr
@@ -91,6 +92,38 @@ class Simulation:
 	'''
 	def dump_network_info(self) -> str:
 		return ''#TODO: implement infection network dump
+
+
+	'''
+	format
+	
+	time step | (for each person: person id | location | (for each disease: disease name | disease state))
+	'''
+	def map_info_format(self) -> str:
+		retstr = 'TIME STEP' + self.DUMP_FILE_DELIMITER
+		for person in self.population:
+			retstr += str(person.id) + self.DUMP_FILE_DELIMITER + 'CURRENT LOCATION' + self.DUMP_FILE_DELIMITER
+			for disease in self.diseases:
+				retstr += disease.name + self.DUMP_FILE_DELIMITER
+				retstr += person.disease_state[disease] + self.DUMP_FILE_DELIMITER
+
+		retstr = retstr[:-1]#drop the last delimiter
+		return retstr
+
+	'''
+	this is the info on who was at what location at what time and what state they were in
+	
+	in reality it just gives, for each person, their location (given as (mapx,mapy) and their state at the given time)
+	'''
+	def dump_map_info(self) -> str:
+		retstr = str(self.current_time)
+		for person in self.population:
+			retstr += str(person.id) + self.DUMP_FILE_DELIMITER + str((person.currentLocation.mapx,person.currentLocation.mapy)) + self.DUMP_FILE_DELIMITER
+			for disease in self.diseases:
+				retstr += disease.name + self.DUMP_FILE_DELIMITER
+				retstr += person.disease_state[disease] + self.DUMP_FILE_DELIMITER
+
+		return retstr[:-1]
 
 	def dump_info(self):
 		assert(self.infodump_file is not None)
@@ -109,6 +142,12 @@ class Simulation:
 						f.write(self.network_info_format() + '\n')
 					self.initial_infodump_done[i] = True
 				write_str = self.dump_network_info()
+			elif ftype == 'map':
+				if not self.initial_infodump_done[i]:
+					with open(file, 'w') as f:
+						f.write(self.map_info_format() + '\n')
+					self.initial_infodump_done[i] = True
+				write_str = self.dump_map_info()
 
 			if len(write_str) > 0:
 				write_str = write_str + '\n'

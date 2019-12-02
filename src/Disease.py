@@ -80,7 +80,7 @@ class Disease:
 			hospital_effect = 0.
 			if is_in_hopsital:
 				hospital_effect = HOSPITAL_TREATMENT_EFFECT * self.treatability
-			return coinflip(min(0,self.die_probability - hospital_effect))#hospitals make it *less* likely that you'll die
+			return coinflip(max(0,self.die_probability - hospital_effect))#hospitals make it *less* likely that you'll die
 
 	def decide_is_vaccinated(self,person:ps.Person):
 		#TODO: antivax clustering here?
