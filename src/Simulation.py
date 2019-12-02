@@ -32,7 +32,7 @@ class Simulation:
 		self.infodump_file = infodump_file
 		self.infodump_type = infodump_type
 		self.time_steps_per_infodump = time_steps_per_infodump
-		self.ensure_non_immune_patient_zero = ensure_non_immune_patient_zero
+		self.ensure_non_immune_patient_zero = ensure_non_immune_patient_zero#TODO: add functionality for more than one patient zero?
 
 		if self.infodump_file is not None:
 			self.initial_infodump_done = [False for _ in self.infodump_file]
@@ -151,11 +151,14 @@ class Simulation:
 	'''
 	Much like the strict convergence, but will return false only if *all* of the diseases we're running have someone in a nonfinal state
 	that is, we stop when any of the diseases die
+	
+	takes about 1m 22s on the small map with 100 population to do 10 days
 	'''
 	def converged_strict_single_dead(self):
 		diseases_dead = set(self.diseases)
 		for person in self.population:
-			for disease in diseases_dead:
+			dd_iterate = diseases_dead.copy()
+			for disease in dd_iterate:
 				if person.disease_state[disease] not in DISEASE_STATES_FINAL:
 					#this disease is still alive
 					diseases_dead.remove(disease)
@@ -187,6 +190,7 @@ class Simulation:
 	def full_simulation(self,converged=converged_strict_single_dead,verbose = False):
 		#pick a patient zero for each disease
 		diseases_running = 0	#how many diseases actually have anyone infected?
+		diseases_not_running = []#which diseases of the ones requested aren't actually running due to immunity?
 		for d in self.diseases:
 			choices = []
 			if self.ensure_non_immune_patient_zero:
@@ -206,6 +210,10 @@ class Simulation:
 				diseases_running += 1
 				if verbose:
 					print(str(d) + ', patient zero: ' + str(zero))
+			else:
+				diseases_not_running.append(d)
+		for dnr in diseases_not_running:
+			self.diseases.remove(dnr)
 		dayct = 0
 		if verbose:
 			print()
