@@ -500,6 +500,15 @@ class Map:
 					min_loc = loc
 		return min_loc
 
+def map_tuple_to_uint8(tup):
+	for k in tup:
+		t = []
+		for v in tup[k]:
+			t.append(np.uint8(v))  # convert now so numpy doesn't whine
+		t = tuple(t)
+		tup[k] = t
+	return tup
+
 """
 Much like the mapreader takes in a png and gives a map object, the map writer will take in a map object, a source png, and a map infection info file and spit out an animation of that simulation
 
@@ -511,9 +520,8 @@ class MapWriter:
 
 	PEOPLE_MIN_SEPARATION = 1	#measured in pixels, how close can people be to one another (distance of 1 means that there must be a gap of at least 1 pixel in every direction, including the corners)
 
-	MAP_DESATURATE_BY = 0		#how much should we desaturate the map by, in absolute (0-255) value
 
-	DISEASE_STATE_COLOR_MAP = {
+	DISEASE_STATE_COLOR_MAP_NO_VAX_DISTINCTION = map_tuple_to_uint8({
 		'S' : (43,124,75,255),
 		'II' : (181,90,90,255),
 		'VII' : (181,90,90,255),
@@ -525,89 +533,133 @@ class MapWriter:
 		'VU' : (102,58,201,255),
 		'D' : (0,0,0,0),
 		'VD' : (0,0,0,0)
-	}
+	})
 
-	def __init__(self,M:Map,img_fname:str,data_fname:str):
-		if len(M.loc_px) != len(M.loc_list):#make sure the map was created with pixel lists
-			raise AttributeError("MapWriter was created with a map not made with pixel lists, make sure RECORD_LOCATION_PIXELS is set when you pass in the map to mapwriter")
-		self.M = M
-		self.img_src = self.imageio.imread(img_fname)	#the array consisting of the original image, on which we will build the frames of the animation
+	DISEASE_STATE_COLOR_MAP_SIMPLIFIED = map_tuple_to_uint8({
+		'S' : (0,255,0,255),
+		'II' : (220,35,35,255),
+		'VII' : (220,35,35,255),
+		'IS' : (127,0,0,255),
+		'VIS' : (127,0,0,255),
+		'R' : (215,215,215,255),
+		'VR' : (215,215,215,255),
+		'VS' : (0,255,0,255),
+		'VU' : (215,215,215,255),
+		'D' : (0,0,0,0),
+		'VD' : (0,0,0,0)
+	})
 
-		if self.MAP_DESATURATE_BY != 0:
-			#desaturate the source image
-			for i,row in enumerate(self.img_src):
-				for j in range(len(row)):
-					for c in range(3):
-						self.img_src[i][j][c] -= self.MAP_DESATURATE_BY
 
+	def __init__(self):
+		self.img_src = None
+		self.M = None
 		self.data = None								#the data we get from the data file
 
 		self.img_expansion_factor = 4					#how much (how many times) bigger should the resulting images be than the original (too small an expansion factor may result in people being drawn on top of each other). in practice, it should be about 2x as big as the original capacity per pixel to make sure there's enough room for everyone
+		self.desaturate_map = False						# how much should we desaturate the map by, in absolute (0-255) value
 		self.src_pixel_map = {}							#mapping of source pixels to the location object they correspond to
-		self.expand_img()
+		self.expansion_src_pixel_map = {}				#mapping of original source pixels to new ones (needed for reading the file correctly)
+		self.fps = 10.									#how many frames should I display every second?
+		self.color_map = MapWriter.DISEASE_STATE_COLOR_MAP_NO_VAX_DISTINCTION#this is just the color map we actually use in the logic, some options are defined above
+		self.loop_anim = False
 
-		with open(data_fname,'r') as df:
-			self.data = list(map(lambda x: x.split('|'),df.readlines()))
-			#drop all the newlines
-			self.data = [list(map(lambda x: x.replace('\n',''),l)) for l in self.data]
 
 		self.anim = []									#the frames of the animation
 		self.occupied_pixels_current = set()			#which pixels are occupied in the current frame? (using this prevents people from being placed on top of one another
 		self.population = []							#this will need to be inferred from the data
 		self.diseases = {}								#mapping of disease names onto corresponding objects
 
-		#grab the population and the diseases from the data
-		#note: format is (person id | current location | (disease name | disease state))
+
+	def read_img(self,img_fname,mr:MapReader=None):
+		if mr is None:
+			mr = MapReader(RECORD_LOCATION_PIXELS=True)
+		else:
+			mr.RECORD_LOCATION_PIXELS = True#make sure this is set
+
+		self.M = mr.create_map_from_file(img_fname)
+		self.img_src = self.imageio.imread(img_fname)  # the array consisting of the original image, on which we will build the frames of the animation
+
+	def read_data(self,data_fname):
+		with open(data_fname,'r') as df:
+			self.data = list(map(lambda x: x.split('|'),df.readlines()))
+			#drop all the newlines
+			self.data = [list(map(lambda x: x.replace('\n',''),l)) for l in self.data]
+
+	def format_img(self):
+		if self.desaturate_map:
+			#desaturate the source image
+			for i,row in enumerate(self.img_src):
+				for j in range(len(row)):
+					pxsum = 0
+					for c in row[j]:
+						pxsum += c
+
+					pxavg = np.uint8(pxsum / 3.)
+					self.img_src[i][j] = (pxavg,pxavg,pxavg,255)
+
+		self.expand_img()
+
+	def initialize_map_objects(self):
+		# grab the population and the diseases from the data
+		# note: format is (person id | current location | (disease name | disease state))
 		import re
-		#first just the disease names, since it'll be repeated for everyone
-		i = 3#i should be on the name of the first disease (4th cell)
-		while not re.match(r'[0-9]+',self.data[0][i]):#while the current cell isn't a number (i.e. a person's id)
-			#make a dummy disease to sit here with the right name (need this for typing to work right)
+		# first just the disease names, since it'll be repeated for everyone
+		i = 3  # i should be on the name of the first disease (4th cell)
+		while not re.match(r'[0-9]+', self.data[0][i]):  # while the current cell isn't a number (i.e. a person's id)
+			# make a dummy disease to sit here with the right name (need this for typing to work right)
 			from Disease import Disease
 			Disease.DISEASE_ID_COUNTER = 0
 			dis = Disease(self.data[0][i])
-			self.diseases.update({self.data[0][i] : dis})
+			self.diseases.update({self.data[0][i]: dis})
 			i += 2
 
-		#now go ahead and add the right amount of people
-		#total number of cells = (num of people) * ((num of diseases) * 2 + 2) + 1
-		#so num of people = (number of cells - 1) / (2 * (num of diseases))
-		num_people = int((len(self.data[0]) - 1) / ((2*len(self.diseases)) + 2))
+		# now go ahead and add the right amount of people
+		# total number of cells = (num of people) * ((num of diseases) * 2 + 2) + 1
+		# so num of people = (number of cells - 1) / (2 * (num of diseases))
+		num_people = int((len(self.data[0]) - 1) / ((2 * len(self.diseases)) + 2))
 		from PersonState import Person
 		houses = None
 		for _ in range(num_people):
-			house,houses = self.M.get_random_house(houses)
-			p = Person(house,self.M)#doesn't really matter what their home is
+			house, houses = self.M.get_random_house(houses)
+			p = Person(house, self.M)  # doesn't really matter what their home is
 			self.population.append(p)
 
-		#sort the locations again
+	def initialize_all(self,img_fname:str,data_fname:str,mr:MapReader = None):
+		self.read_img(img_fname,mr)
+		self.read_data(data_fname)
+		self.format_img()
+		self.initialize_map_objects()
 
 
 	def expand_img(self):
 		nimg = [[(0,0,0,0) for _ in range(len(self.img_src[0]) * self.img_expansion_factor)] for i in range(len(self.img_src) * self.img_expansion_factor)]
+		loc_px = {loc:self.M.loc_px[loc].copy() for loc in self.M.loc_px}#we need to do this because by expanding locations they'll start to bleed over into new ones
 		for i,row in enumerate(self.img_src):
 			for j,px in enumerate(row):
 				#fill the appropriate number and location in nimg
-				loc = self.get_location_by_src_pixel((i,j))
+				loc = self.get_location_by_src_pixel((i,j),cache=False)
+				self.expansion_src_pixel_map.update({(i,j) : (i*self.img_expansion_factor,j*self.img_expansion_factor)})
 				for ii in range(i*self.img_expansion_factor,i*self.img_expansion_factor+self.img_expansion_factor):
 					for jj in range(j*self.img_expansion_factor,j*self.img_expansion_factor+self.img_expansion_factor):
 						#copy the pixel into this index of nimg
 						nimg[ii][jj] = px
-						self.M.loc_px[loc].add((ii,jj))
+						loc_px[loc].add((ii,jj))
 
 		self.img_src = nimg
+		self.M.loc_px = loc_px
 
 	'''
 	get the location object whose source pixel is spx, using the cached map if we can and caching it if we can't
 	'''
-	def get_location_by_src_pixel(self,spx):
+	def get_location_by_src_pixel(self,spx,cache=True):
 		if spx in self.src_pixel_map:
 			return self.src_pixel_map[spx]
 
 		#otherwise, find it
 		for loc in self.M.loc_list:
 			if spx in self.M.loc_px[loc]:
-				self.src_pixel_map.update({spx:loc})
+				if cache:
+					self.src_pixel_map.update({spx:loc})
 				return loc
 
 	'''
@@ -623,10 +675,10 @@ class MapWriter:
 				if len(valid_pixels) == 0:
 					#pick one anyway, but chastise the user for making such a poor selection
 					if error_on_overlay:
-						raise AttributeError('not enough room in ' + str(location) + ' to display ' + str(len(location.people)) + ' people with ' + str(self.PEOPLE_MIN_SEPARATION) + ' minimum pixel separation. People may be displayed on top of one another!')
+						raise AttributeError('not enough room in ' + str(location) + ' (npixels = ' + str(len(self.M.loc_px[location])) + ') to display ' + str(len(location.people)) + ' people with ' + str(self.PEOPLE_MIN_SEPARATION) + ' minimum pixel separation. People may be displayed on top of one another!')
 					else:
 						#just warn them
-						print('WARNING: not enough room in ' + str(location) + ' to display ' + str(len(location.people)) + ' people with ' + str(self.PEOPLE_MIN_SEPARATION) + ' minimum pixel separation. Attempting to fix by relaxing the constraint (people may be displayed on top of one another!)')
+						print('WARNING: not enough room in ' + str(location) + ' (npixels = ' + str(len(self.M.loc_px[location])) + ') to display ' + str(len(location.people)) + ' people with ' + str(self.PEOPLE_MIN_SEPARATION) + ' minimum pixel separation. Attempting to fix by relaxing the constraint (people may be displayed on top of one another!)')
 					valid_pixels = location_pixels	#doesn't matter at this point, just has to be in the right location
 				#pick one of these pixels to put this person at
 				list_valid_pixels = list(valid_pixels)
@@ -652,8 +704,9 @@ class MapWriter:
 		while i < len(self.data[dat_idx]):
 			person_id = int(self.data[dat_idx][i])
 			cloc_match = re.match(r'\(([0-9]+), ?([0-9]+)\)',self.data[dat_idx][i+1])
-			current_loc = (int(cloc_match.group(1)),int(cloc_match.group(2)))
-			self.population[person_id].currentLocation = self.get_location_by_src_pixel(current_loc)
+			current_loc_src_pixel = (int(cloc_match.group(1)),int(cloc_match.group(2)))
+			current_loc = self.get_location_by_src_pixel(self.expansion_src_pixel_map[current_loc_src_pixel])#make sure we apply the remap to get the right locations
+			current_loc.arrive(self.population[person_id])#this will also add them to the location's people list
 
 			#now get their infection states
 			i += 2#now on the name of the first disease
@@ -665,6 +718,10 @@ class MapWriter:
 					self.population[person_id].is_dead = True
 				i += 2
 
+	def copy_img_src(self):
+		copy = [[(r,g,b,a) for (r,g,b,a) in row] for row in self.img_src]
+		return copy
+
 	'''
 	creates a single frame of the animation from the data at dat_idx
 	'''
@@ -672,11 +729,14 @@ class MapWriter:
 		#put everyone in the right place and make sure all their disease states are correct
 		self.load_sim_config(dat_idx)
 		#create the base image
-		frame = self.img_src.copy()
+		frame = self.copy_img_src()
 		occupy = {}
 		#now find a place to put everyone
 		for location in self.M.loc_list:
 			occupy.update(self.place_people(location))
+
+		#now that everyone has a place, clear the occupied pixels for the next frame
+		self.occupied_pixels_current.clear()
 
 		#reverse the occupy dict (pixels point to people)
 		occupy = {occupy[k]:k for k in occupy}
@@ -687,7 +747,7 @@ class MapWriter:
 				if (i,j) in occupy:
 					person = occupy[(i,j)]
 					for disease in person.disease_state:
-						frame[i][j] = self.DISEASE_STATE_COLOR_MAP[person.disease_state[disease]]#TODO: map coloring for multiple diseases?
+						frame[i][j] = self.color_map[person.disease_state[disease]]#TODO: map coloring for multiple diseases?
 
 		self.anim.append(frame)
 
@@ -696,4 +756,6 @@ class MapWriter:
 		for dat_idx in range(1,len(self.data)):
 			self.create_single_frame(dat_idx)
 
-		self.imageio.mimsave(dest_fname,self.anim)
+		loop = 0 if self.loop_anim else 1
+
+		self.imageio.mimwrite(dest_fname,self.anim,format='GIF-PIL',fps=self.fps,loop=loop)
