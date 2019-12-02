@@ -227,7 +227,7 @@ competitive_disease_0 = Disease("Competitive 0")
 competitive_disease_0.infectivity = {'idle':0.,
 									'sleep':0.0075,
 									'traveling':0.,
-									'talking':0.01,
+									'talking':0.005,
 									'intimate':0.035}
 competitive_disease_0.hand_wash_coef = 0.7
 competitive_disease_0.symptom_show_rate = 0.1
