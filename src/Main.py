@@ -1,5 +1,4 @@
 from Simulation import *
-np.random.seed(0)
 
 SIM_CONFIG = 'small'
 pop_size = 100

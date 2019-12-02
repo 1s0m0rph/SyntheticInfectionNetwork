@@ -195,8 +195,8 @@ virus_0 = Disease('virus 0')
 virus_0.infectivity = {'idle':0.0005,
 						'sleep':0.0001,
 						'traveling':0.0001,
-						'talking':0.0075,
-						'intimate':0.04}
+						'talking':0.009,
+						'intimate':0.06}
 virus_0.hand_wash_coef = 0.5
 virus_0.symptom_show_rate = 0.3
 virus_0.recovery_rate = 0.2

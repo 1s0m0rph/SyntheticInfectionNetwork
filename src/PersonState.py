@@ -892,8 +892,8 @@ class Location:
 		self.mapy_center = -1
 
 		#these are used for reconstructing where people were at what time
-		self.mapx = -1
-		self.mapy = -1
+		self.mapx_origin = -1
+		self.mapy_origin = -1
 
 		#this is used for determining the kinds of people that show up at this kind of place -- it's only relevant when creating people and assigning their places/friends
 		#the assumption with it is that age is normally distributed with mean avg_age and stdev age_stdev

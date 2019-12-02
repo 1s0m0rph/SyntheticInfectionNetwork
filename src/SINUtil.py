@@ -185,3 +185,10 @@ def negsafe_mod(a:int,n:int):
 	return a % n
 
 MAP_OPTIMIZATION_FUNCTION = manhattan_distance
+
+def funcall_throws_error(f,*args,**kwargs):
+	try:
+		f(args,kwargs)
+	except:
+		return True
+	return False

@@ -116,7 +116,7 @@ class Simulation:
 	in reality it just gives, for each person, their location (given as (mapx,mapy) and their state at the given time)
 	'''
 	def dump_map_info(self) -> str:
-		retstr = str(self.current_time)
+		retstr = str(self.current_time) + self.DUMP_FILE_DELIMITER
 		for person in self.population:
 			retstr += str(person.id) + self.DUMP_FILE_DELIMITER + str((person.currentLocation.mapx,person.currentLocation.mapy)) + self.DUMP_FILE_DELIMITER
 			for disease in self.diseases:
