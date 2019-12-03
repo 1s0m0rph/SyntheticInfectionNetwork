@@ -61,6 +61,10 @@ class Disease:
 		self.disease_id = Disease.DISEASE_ID_COUNTER
 		Disease.DISEASE_ID_COUNTER += 1
 
+
+		self.R_0_measure = 0.					#what is our current measure of this disease's R_0 value?
+		self.num_infected = 0					#how many people has this disease infected so far?
+
 	def __repr__(self):
 		return "Disease " + str(self.disease_id) + ": " + self.name
 
@@ -158,6 +162,10 @@ class Disease:
 		else:
 			person.disease_state[self] = 'II'
 
+		#now update our R_0 measure
+		self.R_0_measure = ((self.R_0_measure * self.num_infected) + 1)/(self.num_infected + 1)
+		self.num_infected += 1
+
 
 #this part contains some definitions for a few interesting diseases
 
@@ -167,10 +175,10 @@ STD_0.infectivity = {'idle':0.,
 					'sleep':0.,
 					'traveling':0.,
 					'talking':0.00000001,
-					'intimate':0.03}
+					'intimate':0.09}
 STD_0.hand_wash_coef = 0.
 STD_0.symptom_show_rate = 0.05
-STD_0.symptom_infectivity_modifier = 0.
+STD_0.symptom_infectivity_modifier = 0.05
 STD_0.recovery_rate = 0.01
 STD_0.die_probability = 0.001			#this doesn't actually kill you
 STD_0.state_infectability_modifiers = {'S':0.,
@@ -178,8 +186,8 @@ STD_0.state_infectability_modifiers = {'S':0.,
 									   'VII':0.1,
 									   'IS':0.15,
 									   'VIS':0.15,
-									   'R':0.,
-									   'VR':0.,
+									   'R':0.05,
+									   'VR':0.05,
 									   'VS':0.,
 									   'VU':0.,
 									   'D':0.,
@@ -205,6 +213,7 @@ virus_0.vaccination_effectiveness = 0.3
 virus_0.vaccination_rate = 0.2
 virus_0.symptom_health_effect = 0.2#medium effect
 virus_0.treatability = 0.4
+virus_0.symptom_infectivity_modifier = 0.01
 
 #measles-like, some numbers from https://en.wikipedia.org/wiki/Measles
 virus_1 = Disease('virus 1')
@@ -221,6 +230,7 @@ virus_1.vaccination_effectiveness = 0.99
 virus_1.vaccination_rate = 0.95
 virus_1.symptom_health_effect = 0.6#large effect
 virus_1.treatability = 0.05
+virus_1.symptom_infectivity_modifier = 0.03
 
 #entirely made up, but potentially interesting: competitive disease
 competitive_disease_0 = Disease("Competitive 0")
@@ -231,7 +241,7 @@ competitive_disease_0.infectivity = {'idle':0.,
 									'intimate':0.035}
 competitive_disease_0.hand_wash_coef = 0.7
 competitive_disease_0.symptom_show_rate = 0.1
-competitive_disease_0.symptom_infectivity_modifier = 0.3
+competitive_disease_0.symptom_infectivity_modifier = 0.09
 competitive_disease_0.recovery_rate = 0.2
 competitive_disease_0.die_probability = 0.001
 competitive_disease_0.state_infectability_modifiers = {'S':0.,

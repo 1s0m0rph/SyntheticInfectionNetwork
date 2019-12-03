@@ -7,7 +7,7 @@ mw = MapWriter()
 mw.img_expansion_factor = 3
 mw.desaturate_map = True
 mw.color_map = MapWriter.DISEASE_STATE_COLOR_MAP_SIMPLIFIED
-mw.initialize_all('test_map_small.png', 'small_test_virus0_map.psv',mr)
+mw.initialize_all('test_map_small.png', 'small_test_virus0_map_pop150.psv',mr)
 
 #dewit
-mw.animate('virus0_small.gif')
+mw.animate('virus0_small_pop150.gif')

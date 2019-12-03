@@ -21,6 +21,8 @@ DISEASE_STATES = {'S',	#susceptible
 				  'VD'	#vaccinated, dead
 				  }
 
+DISEASE_STATES_LIST = list(DISEASE_STATES)#for constant ordering
+
 DISEASE_STATES_SUSCEPTIBLE = {'S','VS'}
 DISEASE_STATES_INFECTIOUS = {'II','VII','IS','VIS'}
 DISEASE_STATES_SYMPTOMATIC = {'IS','VIS'}

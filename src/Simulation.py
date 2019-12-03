@@ -58,7 +58,7 @@ class Simulation:
 	def infection_info_format(self):
 		retstr = 'TIME STEP' + self.DUMP_FILE_DELIMITER
 		for disease in self.diseases:
-			for stype in DISEASE_STATES:
+			for stype in DISEASE_STATES_LIST:
 				retstr += disease.name + ' '
 				retstr += stype + self.DUMP_FILE_DELIMITER
 
@@ -72,11 +72,11 @@ class Simulation:
 	def dump_infection_info(self) -> str:
 		retstr = str(self.current_time) + self.DUMP_FILE_DELIMITER
 		for disease in self.diseases:
-			disease_state_counts = {state: 0 for state in DISEASE_STATES}
+			disease_state_counts = {state: 0 for state in DISEASE_STATES_LIST}
 			for person in self.population:
 				disease_state_counts[person.disease_state[disease]] += 1
 
-			for state in disease_state_counts:
+			for state in DISEASE_STATES_LIST:
 				retstr += str(disease_state_counts[state]) + self.DUMP_FILE_DELIMITER
 
 		retstr += str(len(self.population))
@@ -226,7 +226,7 @@ class Simulation:
 		else:
 			return False
 
-	def full_simulation(self,converged=converged_strict_single_dead,verbose = False):
+	def full_simulation(self,converged=converged_strict_single_dead,verbose = False,time_limit=0):
 		#pick a patient zero for each disease
 		diseases_running = 0	#how many diseases actually have anyone infected?
 		diseases_not_running = []#which diseases of the ones requested aren't actually running due to immunity?
@@ -256,7 +256,7 @@ class Simulation:
 		dayct = 0
 		if verbose:
 			print()
-		while not converged(self):
+		while (not converged(self)) and ((time_limit <= 0) or (dayct < time_limit)):
 			self.simulate_day()
 			if verbose:
 				print('day ' + str(dayct) + ' summary: ')

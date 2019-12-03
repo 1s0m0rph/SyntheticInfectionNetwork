@@ -549,6 +549,8 @@ class MapWriter:
 		'VD' : (0,0,0,0)
 	})
 
+	DISEASE_STATE_COLOR_PRECEDENCE = {x:i for i,x in enumerate(['D','VD','S','VS','II','VII','IS','VIS','R','VR','VU'])}
+
 
 	def __init__(self):
 		self.img_src = None
@@ -746,8 +748,15 @@ class MapWriter:
 			for j in range(len(row)):
 				if (i,j) in occupy:
 					person = occupy[(i,j)]
+					#resolve multiple diseases using the precedence of states (effectively union them)
+					highest_precedence_state = None
+					highest_precedence_state_val = -1
 					for disease in person.disease_state:
-						frame[i][j] = self.color_map[person.disease_state[disease]]#TODO: map coloring for multiple diseases?
+						state = person.disease_state[disease]
+						if self.DISEASE_STATE_COLOR_PRECEDENCE[state] > highest_precedence_state_val:
+							highest_precedence_state = state
+							highest_precedence_state_val = self.DISEASE_STATE_COLOR_PRECEDENCE[state]
+						frame[i][j] = self.color_map[highest_precedence_state]
 
 		self.anim.append(frame)
 

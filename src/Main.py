@@ -1,16 +1,18 @@
 from Simulation import *
 
 SIM_CONFIG = 'small'
-pop_size = 100
+pop_size = 150
+time_step_per_dump = 60
 # SIM_CONFIG = '750 full'
 
-dump_file_infections = 'small_test_virus0_map.psv'
-dump_files = [dump_file_infections]
+dump_file_infection = 'small_test_virus0_inf_pop150.psv'
+dump_file_map = 'small_test_virus0_map_pop150.psv'
+dump_files = [dump_file_map,dump_file_infection]
 dis = [virus_0]
 
-dump_type = ['map']
+dump_type = ['map','infection']
 
-s = Simulation(infodump_file=dump_files, ensure_non_immune_patient_zero=True, infodump_type=dump_type, time_steps_per_infodump=300)
+s = Simulation(infodump_file=dump_files, ensure_non_immune_patient_zero=True, infodump_type=dump_type, time_steps_per_infodump=time_step_per_dump)
 
 if SIM_CONFIG == 'full':
 
