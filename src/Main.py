@@ -5,10 +5,10 @@ pop_size = 150
 time_step_per_dump = 60
 # SIM_CONFIG = '750 full'
 
-dump_file_infection = 'small_test_virus0_inf_pop150.psv'
-dump_file_map = 'small_test_virus0_map_pop150.psv'
+dump_file_infection = 'small_test_all_diseases_inf_pop150.psv'
+dump_file_map = 'small_test_all_diseases_map_pop150.psv'
 dump_files = [dump_file_map,dump_file_infection]
-dis = [virus_0]
+dis = [virus_0,virus_1,STD_0,competitive_disease_0]
 
 dump_type = ['map','infection']
 
@@ -39,12 +39,13 @@ s.create_population(pb)
 #YEET
 s.full_simulation(verbose=True)
 print('SUMMARY\n')
-for person in s.population:
-	for disease in person.disease_state:
-		if person.disease_state[disease] not in DISEASE_STATES_INITIAL:
-			print(str(person) + ('(DECEASED)' if person.is_dead else '') + ':')
-			print('final location: ' + str(person.currentLocation))
-			print('final activity: ' + str(person.currentActivity))
-			print('disease states: ' + str(person.disease_state))
-			print('friends: ' + str(person.friends))
-			print('coworkers: ' + str(person.coworkers))
+for disease in s.diseases:
+	print('for ' + disease.name + ':')
+	disease_state_counts = {state:0 for state in DISEASE_STATES_LIST}
+	for person in s.population:
+		disease_state_counts[person.disease_state[disease]] += 1
+
+	for state in DISEASE_STATES_LIST:
+		print(state + ': ' + str(disease_state_counts[state]) + ' total')
+
+	print()

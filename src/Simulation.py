@@ -226,11 +226,12 @@ class Simulation:
 		else:
 			return False
 
-	def full_simulation(self,converged=converged_strict_single_dead,verbose = False,time_limit=0):
+	def full_simulation(self,converged=converged_strict_single_dead,verbose = False,time_limit=0,store_R_0s=False):
 		#pick a patient zero for each disease
 		diseases_running = 0	#how many diseases actually have anyone infected?
 		diseases_not_running = []#which diseases of the ones requested aren't actually running due to immunity?
 		for d in self.diseases:
+			d.calculate_R_0 = store_R_0s
 			choices = []
 			if self.ensure_non_immune_patient_zero:
 				for person in self.population:
@@ -256,8 +257,30 @@ class Simulation:
 		dayct = 0
 		if verbose:
 			print()
+		R_0s = {disease:[] for disease in self.diseases}		#map from disease to list of (total number of people infected currently,R0 value) at the end of each day
+		true_R_0 = {disease:0. for disease in self.diseases}
+		max_infected = {disease:0 for disease in self.diseases}
 		while (not converged(self)) and ((time_limit <= 0) or (dayct < time_limit)):
 			self.simulate_day()
+			if store_R_0s:
+				for disease in self.diseases:
+					# calculate the R_0 value for today
+					if len(disease.num_infected_by) > 0:
+						today_r0 = np.mean(list(disease.num_infected_by.values()))
+						infected_now = 0
+						all_infected = True
+						for person in self.population:
+							if person.disease_state[disease] in DISEASE_STATES_INFECTIOUS:
+								infected_now += 1
+							if person.disease_state[disease] in DISEASE_STATES_SUSCEPTIBLE:
+								all_infected = False
+						if infected_now > max_infected[disease]:
+							true_R_0[disease] = today_r0
+							max_infected[disease] = infected_now
+						R_0s[disease].append((infected_now,today_r0))
+						if all_infected:
+							return true_R_0	#this parameter is only set if we're trying to calculate r0 anyway, and we have our estimate so we're done
+
 			if verbose:
 				print('day ' + str(dayct) + ' summary: ')
 				print('total infections today:\t\t' + str(self.total_idle_infections_today + self.total_direct_infections_today))
@@ -277,3 +300,6 @@ class Simulation:
 				print('current infections: ' + str(total_infected))	#will be off by however many diseases are actually going
 				print()
 			dayct += 1
+
+		if store_R_0s:
+			return true_R_0

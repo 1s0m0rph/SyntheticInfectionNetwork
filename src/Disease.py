@@ -10,9 +10,10 @@ class Disease:
 
 	DISEASE_ID_COUNTER = 0
 
-	def __init__(self,name:str):
+	def __init__(self,name:str,calculate_R_0=False):
 
 		self.name = name
+		self.calculate_R_0 = calculate_R_0
 
 		#defaults describe the null disease that can't actually do anything
 		self.infectivity = {'idle':0.,
@@ -62,8 +63,7 @@ class Disease:
 		Disease.DISEASE_ID_COUNTER += 1
 
 
-		self.R_0_measure = 0.					#what is our current measure of this disease's R_0 value?
-		self.num_infected = 0					#how many people has this disease infected so far?
+		self.num_infected_by = {}				#how many people has a given person infected
 
 	def __repr__(self):
 		return "Disease " + str(self.disease_id) + ": " + self.name
@@ -149,7 +149,18 @@ class Disease:
 
 		infectivity = self.infectivity[effective_activity_type] + symptom_effect + hand_wash_effect + intimate_effect + net_symbio_effect
 
-		return coinflip(infectivity)
+		res = coinflip(infectivity)
+		if res:
+			if self.calculate_R_0:
+				# now update our R_0 measure
+				if a in self.num_infected_by:
+					self.num_infected_by[a] += 1
+				else:
+					self.num_infected_by.update({a:1})
+
+			return True
+		else:
+			return False
 
 	'''
 	actually infect this person with this disease
@@ -161,10 +172,6 @@ class Disease:
 			person.disease_state[self] = 'VII'
 		else:
 			person.disease_state[self] = 'II'
-
-		#now update our R_0 measure
-		self.R_0_measure = ((self.R_0_measure * self.num_infected) + 1)/(self.num_infected + 1)
-		self.num_infected += 1
 
 
 #this part contains some definitions for a few interesting diseases
@@ -213,14 +220,14 @@ virus_0.vaccination_effectiveness = 0.3
 virus_0.vaccination_rate = 0.2
 virus_0.symptom_health_effect = 0.2#medium effect
 virus_0.treatability = 0.4
-virus_0.symptom_infectivity_modifier = 0.01
+virus_0.symptom_infectivity_modifier = 0.05
 
 #measles-like, some numbers from https://en.wikipedia.org/wiki/Measles
 virus_1 = Disease('virus 1')
 virus_1.infectivity = { 'idle':0.005,
 						'sleep':0.01,
 						'traveling':0.005,
-						'talking':0.07,
+						'talking':0.1,
 						'intimate':0.09}
 virus_1.hand_wash_coef = 0.2
 virus_1.symptom_show_rate = 1./14.

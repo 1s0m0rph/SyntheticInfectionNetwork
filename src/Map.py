@@ -549,7 +549,7 @@ class MapWriter:
 		'VD' : (0,0,0,0)
 	})
 
-	DISEASE_STATE_COLOR_PRECEDENCE = {x:i for i,x in enumerate(['D','VD','S','VS','II','VII','IS','VIS','R','VR','VU'])}
+	DISEASE_STATE_COLOR_PRECEDENCE = {x:i for i,x in enumerate(['D','VD','VU','S','VS','II','VII','IS','VIS','R','VR'])}
 
 
 	def __init__(self):
