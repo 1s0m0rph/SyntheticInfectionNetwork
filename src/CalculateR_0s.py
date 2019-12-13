@@ -7,8 +7,8 @@ from Simulation import *
 diseases_to_measure = [virus_1]
 max_days = 30
 with_vaccination = False												#should we allow these diseases to have any of the population vaccinated in our measurement
-SIM_CONFIG = 'small'
-pop_size = 150
+SIM_CONFIG = 'full'
+pop_size = 1000
 
 
 if not with_vaccination:
@@ -42,6 +42,8 @@ for disease in diseases_to_measure:
 	s.create_population(pb)
 
 	#YEET
-	r0 = s.full_simulation(verbose=True,time_limit=max_days,store_R_0s=True)[disease]
+	s.full_simulation(verbose=True,time_limit=max_days,store_R_0s=True)
+
+	r0 = s.true_R_0[disease]
 
 	print('Measured R_0 for ' + disease.name + ': ' + str(r0))

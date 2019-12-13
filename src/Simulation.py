@@ -36,6 +36,10 @@ class Simulation:
 		self.time_steps_per_infodump = time_steps_per_infodump
 		self.ensure_non_immune_patient_zero = ensure_non_immune_patient_zero#TODO: add functionality for more than one patient zero?
 
+		self.store_R_0s = False
+		self.true_R_0 = {disease:0. for disease in self.diseases}
+		self.R_0_calculation_finished = False
+
 		if self.infodump_file is not None:
 			self.initial_infodump_done = [False for _ in self.infodump_file]
 
@@ -44,13 +48,14 @@ class Simulation:
 
 	def set_diseases(self,to:list):
 		self.diseases = to
+		self.true_R_0 = {disease:0. for disease in self.diseases}
 
 	def create_population(self,pb: PopulationBuilder):
 		pb.set_diseases_present(self.diseases)
 		self.population = pb.create_population()
 
 	def inc_time_step(self):
-		if self.infodump_file is not None:
+		if (self.infodump_file is not None) or self.store_R_0s:
 			if self.current_time % self.time_steps_per_infodump == 0:
 				self.dump_info()
 		self.current_time += 1
@@ -126,33 +131,52 @@ class Simulation:
 		return retstr[:-1]
 
 	def dump_info(self):
-		assert(self.infodump_file is not None)
+		assert((self.infodump_file is not None) or self.store_R_0s)
 		#now we want to print all of the fun stuff to this file so we can visualize it
-		for i,(file,ftype) in enumerate(zip(self.infodump_file,self.infodump_type)):
-			write_str = ''
-			if ftype == 'infection':
-				if not self.initial_infodump_done[i]:
-					with open(file,'w') as f:
-						f.write(self.infection_info_format() + '\n')
-					self.initial_infodump_done[i] = True
-				write_str = self.dump_infection_info()
-			elif ftype == 'network':
-				if not self.initial_infodump_done[i]:
-					with open(file, 'w') as f:
-						f.write(self.network_info_format() + '\n')
-					self.initial_infodump_done[i] = True
-				write_str = self.dump_network_info()
-			elif ftype == 'map':
-				if not self.initial_infodump_done[i]:
-					with open(file, 'w') as f:
-						f.write(self.map_info_format() + '\n')
-					self.initial_infodump_done[i] = True
-				write_str = self.dump_map_info()
+		if self.infodump_file is not None:
+			for i,(file,ftype) in enumerate(zip(self.infodump_file,self.infodump_type)):
+				write_str = ''
+				if ftype == 'infection':
+					if not self.initial_infodump_done[i]:
+						with open(file,'w') as f:
+							f.write(self.infection_info_format() + '\n')
+						self.initial_infodump_done[i] = True
+					write_str = self.dump_infection_info()
+				elif ftype == 'network':
+					if not self.initial_infodump_done[i]:
+						with open(file, 'w') as f:
+							f.write(self.network_info_format() + '\n')
+						self.initial_infodump_done[i] = True
+					write_str = self.dump_network_info()
+				elif ftype == 'map':
+					if not self.initial_infodump_done[i]:
+						with open(file, 'w') as f:
+							f.write(self.map_info_format() + '\n')
+						self.initial_infodump_done[i] = True
+					write_str = self.dump_map_info()
 
-			if len(write_str) > 0:
-				write_str = write_str + '\n'
-				with open(file, 'a') as f:
-					f.write(write_str)
+				if len(write_str) > 0:
+					write_str = write_str + '\n'
+					with open(file, 'a') as f:
+						f.write(write_str)
+
+
+		if self.store_R_0s:
+			for disease in self.diseases:
+				# calculate the R_0 value for today
+				if len(disease.num_infected_by) > 0:
+					today_r0 = np.mean(list(disease.num_infected_by.values()))
+					# infected_now = 0
+					all_infected = True
+					for person in self.population:
+						# if person.disease_state[disease] in DISEASE_STATES_INFECTIOUS:
+						# 	infected_now += 1
+						if person.disease_state[disease] in DISEASE_STATES_SUSCEPTIBLE:
+							all_infected = False
+					if today_r0 > self.true_R_0[disease]:
+						self.true_R_0[disease] = today_r0
+					if all_infected:
+						self.R_0_calculation_finished = True	#this parameter is only set if we're trying to calculate r0 anyway, and we have our estimate so we're done
 
 	def simulate_day(self):
 		self.total_direct_infections_today = 0
@@ -169,10 +193,8 @@ class Simulation:
 				person.action_transition(day_time)#idle infections here
 				self.total_idle_infections_today += person.idle_infection_count
 
-			# #now do infection processing
-			# for location in self.map.loc_list:
-			# 	lir_ret = location.infection_round()
-			# 	self.infection_networks = self.infection_networks.union(lir_ret)
+			if self.R_0_calculation_finished:
+				return
 
 			self.inc_time_step()#may have information dumping side effects
 
@@ -227,6 +249,7 @@ class Simulation:
 			return False
 
 	def full_simulation(self,converged=converged_strict_single_dead,verbose = False,time_limit=0,store_R_0s=False):
+		self.store_R_0s = store_R_0s
 		#pick a patient zero for each disease
 		diseases_running = 0	#how many diseases actually have anyone infected?
 		diseases_not_running = []#which diseases of the ones requested aren't actually running due to immunity?
@@ -257,29 +280,11 @@ class Simulation:
 		dayct = 0
 		if verbose:
 			print()
-		R_0s = {disease:[] for disease in self.diseases}		#map from disease to list of (total number of people infected currently,R0 value) at the end of each day
-		true_R_0 = {disease:0. for disease in self.diseases}
-		max_infected = {disease:0 for disease in self.diseases}
+
 		while (not converged(self)) and ((time_limit <= 0) or (dayct < time_limit)):
 			self.simulate_day()
-			if store_R_0s:
-				for disease in self.diseases:
-					# calculate the R_0 value for today
-					if len(disease.num_infected_by) > 0:
-						today_r0 = np.mean(list(disease.num_infected_by.values()))
-						infected_now = 0
-						all_infected = True
-						for person in self.population:
-							if person.disease_state[disease] in DISEASE_STATES_INFECTIOUS:
-								infected_now += 1
-							if person.disease_state[disease] in DISEASE_STATES_SUSCEPTIBLE:
-								all_infected = False
-						if infected_now > max_infected[disease]:
-							true_R_0[disease] = today_r0
-							max_infected[disease] = infected_now
-						R_0s[disease].append((infected_now,today_r0))
-						if all_infected:
-							return true_R_0	#this parameter is only set if we're trying to calculate r0 anyway, and we have our estimate so we're done
+			if self.R_0_calculation_finished:
+				return
 
 			if verbose:
 				print('day ' + str(dayct) + ' summary: ')
@@ -298,8 +303,10 @@ class Simulation:
 				for disease in self.diseases:
 					print(str(disease) + ': ' + str(n_infected[disease]))
 				print('current infections: ' + str(total_infected))	#will be off by however many diseases are actually going
+				if store_R_0s:
+					print('current R_0 estimates: ' + str(self.true_R_0))
 				print()
 			dayct += 1
 
 		if store_R_0s:
-			return true_R_0
+			return self.true_R_0

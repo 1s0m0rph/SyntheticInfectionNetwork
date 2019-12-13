@@ -5,12 +5,16 @@ pop_size = 150
 time_step_per_dump = 60
 # SIM_CONFIG = '750 full'
 
-dump_file_infection = 'small_test_all_diseases_inf_pop150.psv'
-dump_file_map = 'small_test_all_diseases_map_pop150.psv'
-dump_files = [dump_file_map,dump_file_infection]
-dis = [virus_0,virus_1,STD_0,competitive_disease_0]
+dump_file_infection = 'small_test_deadly0_inf_pop150.psv'
+# dump_file_map = 'small_test_deadly0_map_pop150.psv'
+# dump_files = [dump_file_map,dump_file_infection]
+# dump_files = [dump_file_map]
+dump_files = [dump_file_infection]
+dis = [deadly_0]
 
-dump_type = ['map','infection']
+# dump_type = ['map','infection']
+# dump_type = ['map']
+dump_type = ['infection']
 
 s = Simulation(infodump_file=dump_files, ensure_non_immune_patient_zero=True, infodump_type=dump_type, time_steps_per_infodump=time_step_per_dump)
 

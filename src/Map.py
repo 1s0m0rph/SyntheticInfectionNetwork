@@ -767,4 +767,4 @@ class MapWriter:
 
 		loop = 0 if self.loop_anim else 1
 
-		self.imageio.mimwrite(dest_fname,self.anim,format='GIF-PIL',fps=self.fps,loop=loop)
+		self.imageio.mimwrite(dest_fname,np.array(self.anim),format='GIF-PIL',fps=self.fps,loop=loop)

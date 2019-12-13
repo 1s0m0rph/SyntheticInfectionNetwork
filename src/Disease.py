@@ -205,7 +205,7 @@ STD_0.vaccination_rate = 0.#there isn't one
 STD_0.symptom_health_effect = 0.05#small effect
 STD_0.treatability = 0.#can't be treated
 
-#flu-like
+#flu-like (R_0 = 2.25)
 virus_0 = Disease('virus 0')
 virus_0.infectivity = {'idle':0.0005,
 						'sleep':0.0001,
@@ -268,6 +268,35 @@ competitive_disease_0.vaccination_rate = 0.4
 competitive_disease_0.symptom_health_effect = 0.35
 competitive_disease_0.treatability = 0.3
 
+#kills easily (R0 = 2.02)
+deadly_0 = Disease("Deadly 0")
+deadly_0.infectivity = {'idle':0.,
+						'sleep':0.0075,
+						'traveling':0.,
+						'talking':0.05,
+						'intimate':0.1}
+deadly_0.hand_wash_coef = 0.1
+deadly_0.symptom_show_rate = 0.1
+deadly_0.symptom_infectivity_modifier = 0.09
+deadly_0.recovery_rate = 0.02
+deadly_0.die_probability = 0.2
+deadly_0.state_infectability_modifiers = {'S':0.,
+									   'II':0.1,
+									   'VII':0.1,
+									   'IS':0.15,
+									   'VIS':0.15,
+									   'R':0.05,
+									   'VR':0.05,
+									   'VS':0.,
+									   'VU':0.,
+									   'D':0.,
+									   'VD':0.,
+									  }
+deadly_0.vaccination_effectiveness = 0.85
+deadly_0.vaccination_rate = 0.1
+deadly_0.symptom_health_effect = 0.7
+deadly_0.treatability = 0.1
+
 #this is a test disease to make sure the logic all works as expected
 t_disease = Disease('test disease')
 t_disease.infectivity = {'idle':0.,
@@ -284,7 +313,7 @@ t_disease.vaccination_rate = 0.5
 t_disease.symptom_health_effect = 1#F
 t_disease.treatability = 0.#F
 
-all_diseases = [STD_0,virus_0,virus_1,competitive_disease_0]	#all diseases yet defined
-real_basis_diseases = [STD_0,virus_0,virus_1]					#just the ones that have basis in real ones
-fast_diseases = [virus_0,virus_1,competitive_disease_0]			#just the ones with high recovery/death rates
+all_diseases = [STD_0,virus_0,virus_1,competitive_disease_0,deadly_0]	#all diseases yet defined
+real_basis_diseases = [STD_0,virus_0,virus_1]							#just the ones that have basis in real ones
+fast_diseases = [virus_0,virus_1,competitive_disease_0,deadly_0]		#just the ones with high recovery/death rates
 test_diseases = [t_disease]
